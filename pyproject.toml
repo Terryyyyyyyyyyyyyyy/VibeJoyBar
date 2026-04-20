@@ -1,0 +1,51 @@
+[project]
+name = "vibejoy"
+version = "0.0.1"
+description = "Map Nintendo Switch Joy-Con to macOS keyboard shortcuts — configurable via plain TOML, friendly to humans and AI."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "liangweifeng" }]
+keywords = ["joy-con", "nintendo-switch", "keyboard", "macos", "hid", "input-mapping"]
+dependencies = [
+    "joycon-python>=0.2.4",
+    "pynput>=1.7.7",
+    "hidapi>=0.14.0",
+    # joycon-python 的 __init__ 顶层 import gyro 模块，gyro 依赖 pyglm，
+    # 但 0.2.4 版本没声明这个依赖，必须手动补。
+    "pyglm>=2.7.0",
+]
+
+[project.scripts]
+vibejoy = "vibejoy.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vibejoy"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/vibejoy/config.example.toml" = "vibejoy/config.example.toml"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = [
+    "E501",   # line length — we have formatter for that
+    "B008",   # function call in default argument (common in CLI code)
+    "SIM105", # contextlib.suppress is slower than try/except pass; not worth it
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B", "SIM"]

@@ -1,22 +1,26 @@
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
 *.egg-info/
-dist/
-build/
 .eggs/
 *.egg
+dist/
+build/
 
+# uv / venv
 .venv/
 venv/
-env/
+.python-version-local
 
-calibration_result.json
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+
+# Project-local
 .claude/
-config/user.json
-nsjc.log
-scripts/
-Doc/
-Docs/
-CLAUDE.md
-config/user.json
+*.log
+config.local.toml
