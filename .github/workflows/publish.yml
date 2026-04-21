@@ -1,0 +1,91 @@
+name: Publish
+
+on:
+  push:
+    tags: ["v*"]
+
+# Trusted Publishing — OIDC token, no PyPI API key stored anywhere.
+# Before the first run, configure a pending publisher on PyPI:
+#   https://pypi.org/manage/account/publishing/
+#     PyPI project name : vibejoy
+#     Owner             : WEIFENG2333
+#     Repository name   : vibejoy
+#     Workflow filename : publish.yml
+#     Environment name  : release
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Verify tag matches package version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(uv run --no-project python -c 'import tomllib,pathlib; pj=tomllib.loads(pathlib.Path("pyproject.toml").read_text()); import re, pathlib as p; txt=p.Path("src/vibejoy/__init__.py").read_text(); print(re.search(r"__version__\s*=\s*\"([^\"]+)\"", txt).group(1))')"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error ::git tag ($TAG) does not match package version ($PKG)"
+            exit 1
+          fi
+          echo "tag $TAG == package $PKG, ok"
+
+      - name: Build
+        run: uv build
+
+      - name: Inspect wheel metadata
+        run: uv tool run --from twine twine check dist/*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: release
+      url: https://pypi.org/project/vibejoy/
+    permissions:
+      id-token: write   # required for OIDC / Trusted Publishing
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: Attach artifacts to GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            dist/* \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
