@@ -1,5 +1,11 @@
 # VibeJoy
 
+[![CI](https://github.com/WEIFENG2333/vibejoy/actions/workflows/ci.yml/badge.svg)](https://github.com/WEIFENG2333/vibejoy/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/vibejoy.svg)](https://pypi.org/project/vibejoy/)
+[![Python](https://img.shields.io/pypi/pyversions/vibejoy.svg)](https://pypi.org/project/vibejoy/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Platform: macOS](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](#requirements)
+
 Map Nintendo Switch **Joy-Con** inputs to **macOS keyboard shortcuts** — configured via a single TOML file, controllable from the command line, and designed to be edited by humans *or* AI copilots.
 
 Bonus: expose the Joy-Con's **HD Rumble** as a CLI, so your Claude Code / any-AI hook can buzz your hand when a task finishes.
@@ -29,11 +35,16 @@ The existing Joy-Con → keyboard projects are Windows-first, GUI-heavy, and don
 ## Install
 
 ```bash
-# with uv (recommended)
-uv sync
+# end-user install (once 0.1.0 lands on PyPI)
+pip install vibejoy
 
-# or with pip
-pip install -e .
+# or with uv for a fully isolated tool
+uv tool install vibejoy
+
+# from source, for development
+git clone https://github.com/WEIFENG2333/vibejoy.git
+cd vibejoy
+uv sync
 ```
 
 Grant **Accessibility** permission to your terminal the first time you run anything that simulates keys — otherwise pynput silently does nothing.
