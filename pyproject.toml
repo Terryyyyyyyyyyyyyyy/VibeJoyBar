@@ -1,20 +1,61 @@
 [project]
 name = "vibejoy"
-version = "0.0.1"
-description = "Map Nintendo Switch Joy-Con to macOS keyboard shortcuts — configurable via plain TOML, friendly to humans and AI."
+dynamic = ["version"]
+description = "Map Nintendo Switch Joy-Con to macOS keyboard shortcuts — TOML-configured, CLI-driven, AI-friendly."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
-authors = [{ name = "liangweifeng" }]
-keywords = ["joy-con", "nintendo-switch", "keyboard", "macos", "hid", "input-mapping"]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "liangweifeng", email = "fengeto@gmail.com" }]
+keywords = [
+    "joy-con",
+    "joycon",
+    "nintendo-switch",
+    "keyboard-mapping",
+    "macos",
+    "hid",
+    "input-mapping",
+    "ai-friendly",
+    "claude-code",
+    "automation",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Environment :: MacOS X",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: MacOS :: MacOS X",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Desktop Environment :: Window Managers",
+    "Topic :: System :: Hardware :: Hardware Drivers",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
 dependencies = [
     "joycon-python>=0.2.4",
     "pynput>=1.7.7",
     "hidapi>=0.14.0",
-    # joycon-python 的 __init__ 顶层 import gyro 模块，gyro 依赖 pyglm，
-    # 但 0.2.4 版本没声明这个依赖，必须手动补。
+    # joycon-python 0.2.4 imports `glm` (pyglm) at package top-level but forgets
+    # to declare it; pin explicitly until upstream fixes. See CLAUDE.md.
     "pyglm>=2.7.0",
+    # macOS-only frameworks we import directly (window.py, shell.py).
+    # Guarded by marker so `pip install vibejoy` on other platforms still
+    # resolves — it just won't be functionally useful off macOS.
+    "pyobjc-core>=10; sys_platform == 'darwin'",
+    "pyobjc-framework-Cocoa>=10; sys_platform == 'darwin'",
+    "pyobjc-framework-Quartz>=10; sys_platform == 'darwin'",
 ]
+
+[project.urls]
+Homepage = "https://github.com/WEIFENG2333/vibejoy"
+Repository = "https://github.com/WEIFENG2333/vibejoy"
+Issues = "https://github.com/WEIFENG2333/vibejoy/issues"
+Changelog = "https://github.com/WEIFENG2333/vibejoy/blob/main/CHANGELOG.md"
 
 [project.scripts]
 vibejoy = "vibejoy.cli:main"
@@ -23,11 +64,25 @@ vibejoy = "vibejoy.cli:main"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+path = "src/vibejoy/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/vibejoy"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/vibejoy/config.example.toml" = "vibejoy/config.example.toml"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/src",
+    "/tests",
+    "/scripts",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]
 
 [tool.uv]
 dev-dependencies = [
@@ -42,10 +97,17 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
 ignore = [
-    "E501",   # line length — we have formatter for that
+    "E501",   # line length — handled by formatter
     "B008",   # function call in default argument (common in CLI code)
     "SIM105", # contextlib.suppress is slower than try/except pass; not worth it
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    # pyjoycon 0.2.4 uses deprecated `import glm` style — not our problem.
+    "ignore::PendingDeprecationWarning:pyjoycon.*",
+]

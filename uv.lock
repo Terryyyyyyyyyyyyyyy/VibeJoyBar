@@ -346,13 +346,15 @@ wheels = [
 
 [[package]]
 name = "vibejoy"
-version = "0.0.1"
 source = { editable = "." }
 dependencies = [
     { name = "hidapi" },
     { name = "joycon-python" },
     { name = "pyglm" },
     { name = "pynput" },
+    { name = "pyobjc-core", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'" },
 ]
 
 [package.dev-dependencies]
@@ -367,6 +369,9 @@ requires-dist = [
     { name = "joycon-python", specifier = ">=0.2.4" },
     { name = "pyglm", specifier = ">=2.7.0" },
     { name = "pynput", specifier = ">=1.7.7" },
+    { name = "pyobjc-core", marker = "sys_platform == 'darwin'", specifier = ">=10" },
+    { name = "pyobjc-framework-cocoa", marker = "sys_platform == 'darwin'", specifier = ">=10" },
+    { name = "pyobjc-framework-quartz", marker = "sys_platform == 'darwin'", specifier = ">=10" },
 ]
 
 [package.metadata.requires-dev]
