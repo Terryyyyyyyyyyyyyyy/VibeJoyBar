@@ -75,15 +75,9 @@ _HIGH_DING = b"\xc8\xe8\x72\x08"
 
 
 PRESETS: dict[str, tuple[RumblePulse, ...]] = {
-    "short": (
-        RumblePulse(_STRONG_CLICK, 120),
-    ),
-    "long": (
-        RumblePulse(_MEDIUM_BUZZ, 400),
-    ),
-    "click": (
-        RumblePulse(_HIGH_DING, 40),
-    ),
+    "short": (RumblePulse(_STRONG_CLICK, 120),),
+    "long": (RumblePulse(_MEDIUM_BUZZ, 400),),
+    "click": (RumblePulse(_HIGH_DING, 40),),
     "double": (
         RumblePulse(_STRONG_CLICK, 80),
         RumblePulse(NEUTRAL_SIDE, 60),
@@ -139,7 +133,9 @@ def parse_bytes_spec(spec: str) -> bytes:
     if all(len(t) == 2 and all(c in hex_chars for c in t) for t in tokens):
         raw = "".join(tokens)
         if len(raw) not in (8, 16):
-            raise ValueError(f"hex bytes spec must yield 4 or 8 bytes, got {len(raw)//2}: {spec!r}")
+            raise ValueError(
+                f"hex bytes spec must yield 4 or 8 bytes, got {len(raw) // 2}: {spec!r}"
+            )
         return bytes.fromhex(raw)
 
     # Decimal path.

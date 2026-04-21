@@ -25,6 +25,7 @@ try:
         NSApplicationActivateIgnoringOtherApps,
         NSWorkspace,
     )
+
     _HAS_APPKIT = True
 except ImportError:  # pragma: no cover — always available on macOS with pyobjc
     _HAS_APPKIT = False

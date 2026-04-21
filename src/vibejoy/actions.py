@@ -104,9 +104,18 @@ class ShellAction:
 
 
 Action: TypeAlias = (
-    NoAction | TapAction | HoldAction | RepeatAction | AutoAction
-    | ComboAction | SequenceAction | TypeAction | DelayAction
-    | MacroRef | WindowSwitchAction | ShellAction
+    NoAction
+    | TapAction
+    | HoldAction
+    | RepeatAction
+    | AutoAction
+    | ComboAction
+    | SequenceAction
+    | TypeAction
+    | DelayAction
+    | MacroRef
+    | WindowSwitchAction
+    | ShellAction
 )
 
 
@@ -124,8 +133,7 @@ def parse_action(spec: str) -> Action:
 
     if ":" not in s:
         raise ActionParseError(
-            f"missing ':' separator in {spec!r}. "
-            f"Expected <verb>:<payload> (e.g. 'tap:enter')."
+            f"missing ':' separator in {spec!r}. Expected <verb>:<payload> (e.g. 'tap:enter')."
         )
 
     verb, _, payload = s.partition(":")
@@ -185,9 +193,7 @@ def _parse_sequence(payload: str, raw: str) -> Action:
     body, ms = _split_at(payload)
     keys = _split_combo_keys(body)
     if len(keys) < 2:
-        raise ActionParseError(
-            f"sequence needs at least 2 keys (modifier + tapped), got {raw!r}"
-        )
+        raise ActionParseError(f"sequence needs at least 2 keys (modifier + tapped), got {raw!r}")
     return SequenceAction(keys=keys, repeat_ms=ms or 0)
 
 

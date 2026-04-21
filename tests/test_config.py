@@ -49,7 +49,7 @@ def test_invalid_toml(tmp_path: Path) -> None:
 
 def test_unknown_top_level_section(tmp_path: Path) -> None:
     path = tmp_path / "bad.toml"
-    path.write_text('[mystery]\nfoo = 1\n', encoding="utf-8")
+    path.write_text("[mystery]\nfoo = 1\n", encoding="utf-8")
     with pytest.raises(ConfigError, match="unknown top-level"):
         load_config(path)
 
@@ -57,7 +57,8 @@ def test_unknown_top_level_section(tmp_path: Path) -> None:
 def test_unknown_profile_side(tmp_path: Path) -> None:
     path = tmp_path / "bad.toml"
     path.write_text(
-        '[profile.center.buttons]\na = "tap:enter"\n', encoding="utf-8",
+        '[profile.center.buttons]\na = "tap:enter"\n',
+        encoding="utf-8",
     )
     with pytest.raises(ConfigError, match="unknown profile"):
         load_config(path)
@@ -119,8 +120,7 @@ def test_validate_global_ranges() -> None:
 def test_macro_rejects_nested_macro(tmp_path: Path) -> None:
     path = tmp_path / "bad.toml"
     path.write_text(
-        '[macro.outer]\nsteps = ["macro:inner"]\n'
-        '[macro.inner]\nsteps = ["tap:enter"]\n',
+        '[macro.outer]\nsteps = ["macro:inner"]\n[macro.inner]\nsteps = ["tap:enter"]\n',
         encoding="utf-8",
     )
     with pytest.raises(ConfigError, match="nested macro"):

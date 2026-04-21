@@ -22,13 +22,15 @@ class FakePopen:
     def __call__(self, argv, *, env=None, cwd=None, start_new_session=False, **kwargs):
         if self.raise_exc is not None:
             raise self.raise_exc
-        self.calls.append({
-            "argv": list(argv),
-            "env": dict(env or {}),
-            "cwd": cwd,
-            "start_new_session": start_new_session,
-            "kwargs": kwargs,
-        })
+        self.calls.append(
+            {
+                "argv": list(argv),
+                "env": dict(env or {}),
+                "cwd": cwd,
+                "start_new_session": start_new_session,
+                "kwargs": kwargs,
+            }
+        )
         return self
 
 
@@ -58,15 +60,15 @@ class TestBuildContextEnv:
     def test_frontmost_app_only_when_present(self) -> None:
         assert "VIBEJOY_FRONTMOST_APP" not in build_context_env(event="pressed")
         assert (
-            build_context_env(event="pressed", frontmost_app="Safari")
-            ["VIBEJOY_FRONTMOST_APP"]
+            build_context_env(event="pressed", frontmost_app="Safari")["VIBEJOY_FRONTMOST_APP"]
             == "Safari"
         )
 
     def test_empty_frontmost_app_is_dropped(self) -> None:
         # An empty string shouldn't leak through as a misleading var.
         assert "VIBEJOY_FRONTMOST_APP" not in build_context_env(
-            event="pressed", frontmost_app="",
+            event="pressed",
+            frontmost_app="",
         )
 
 

@@ -46,7 +46,9 @@ class TestQuantizeDirection:
 
 class TestStickCalibration:
     def test_normalize_subtracts_baseline_and_inverts_y(self) -> None:
-        cal = StickCalibration(baseline_x=2000, baseline_y=1800, half_range_x=1000, half_range_y=1000)
+        cal = StickCalibration(
+            baseline_x=2000, baseline_y=1800, half_range_x=1000, half_range_y=1000
+        )
         nx, ny = cal.normalize(3000, 800)  # dx=+1000, dy=-1000
         assert nx == pytest.approx(1.0)
         # Y is inverted internally so raw-down becomes +1.

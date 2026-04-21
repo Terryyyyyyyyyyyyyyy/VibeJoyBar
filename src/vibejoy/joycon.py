@@ -132,7 +132,10 @@ class JoyConReader:
         self._calibration = cal
         logger.info(
             "%s stick baseline: x=%d y=%d (half-range=%d)",
-            self._side, cal.baseline_x, cal.baseline_y, cal.half_range_x,
+            self._side,
+            cal.baseline_x,
+            cal.baseline_y,
+            cal.half_range_x,
         )
         return cal
 

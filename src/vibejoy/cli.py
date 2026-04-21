@@ -83,15 +83,21 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p_rumble = sub.add_parser("rumble", help="trigger rumble")
     p_rumble.add_argument(
-        "--pattern", "-p", default="short",
+        "--pattern",
+        "-p",
+        default="short",
         help=f"preset name or bytes spec (presets: {', '.join(preset_names())})",
     )
     p_rumble.add_argument(
-        "--side", "-s", default="any", choices=("any", "left", "right", "l", "r"),
+        "--side",
+        "-s",
+        default="any",
+        choices=("any", "left", "right", "l", "r"),
         help="which controller (default: any connected)",
     )
     p_rumble.add_argument(
-        "--direct", action="store_true",
+        "--direct",
+        action="store_true",
         help="skip the daemon and open HID directly",
     )
 
@@ -181,6 +187,7 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     # 3. pynput permissions probe
     try:
         from pynput.keyboard import Controller, Key
+
         Controller().press(Key.shift)
         Controller().release(Key.shift)
         print("✓ pynput  keyboard simulation works")
@@ -193,6 +200,7 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     # 4. Window switching
     try:
         from .window import list_running_apps
+
         n = len(list_running_apps())
         print(f"✓ window  {n} apps visible via NSWorkspace")
     except Exception as e:
@@ -237,11 +245,13 @@ def cmd_rumble(args: argparse.Namespace) -> int:
     socket_path = default_socket_path()
     if not args.direct and socket_path.exists():
         try:
-            reply = ipc_call({
-                "cmd": "rumble",
-                "pattern": args.pattern,
-                "side": args.side,
-            })
+            reply = ipc_call(
+                {
+                    "cmd": "rumble",
+                    "pattern": args.pattern,
+                    "side": args.side,
+                }
+            )
             print(f"rumble via daemon: {json.dumps(reply, ensure_ascii=False)}")
             return 0
         except IPCError as e:

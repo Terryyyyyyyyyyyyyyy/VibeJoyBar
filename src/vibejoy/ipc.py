@@ -120,9 +120,7 @@ class ControlServer:
             raise IPCError(f"cannot bind control socket {self._path}: {e}") from e
 
         self._sock = sock
-        self._thread = threading.Thread(
-            target=self._serve_forever, name="vibejoy-ipc", daemon=True
-        )
+        self._thread = threading.Thread(target=self._serve_forever, name="vibejoy-ipc", daemon=True)
         self._thread.start()
         logger.info("control socket listening at %s", self._path)
 
@@ -204,9 +202,7 @@ def call(
         try:
             sock.connect(str(socket_path))
         except OSError as e:
-            raise IPCError(
-                f"cannot connect to vibejoy daemon at {socket_path}: {e}"
-            ) from e
+            raise IPCError(f"cannot connect to vibejoy daemon at {socket_path}: {e}") from e
 
         _send_message(sock, payload)
         reply_bytes = _recv_message(sock)

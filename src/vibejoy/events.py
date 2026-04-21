@@ -13,14 +13,26 @@ Side: TypeAlias = Literal["left", "right"]
 """Which Joy-Con the event came from."""
 
 Direction: TypeAlias = Literal[
-    "up", "down", "left", "right",
-    "up-left", "up-right", "down-left", "down-right",
+    "up",
+    "down",
+    "left",
+    "right",
+    "up-left",
+    "up-right",
+    "down-left",
+    "down-right",
 ]
 """Stick direction after deadzone + angle quantization."""
 
 ALL_DIRECTIONS: tuple[Direction, ...] = (
-    "up", "down", "left", "right",
-    "up-left", "up-right", "down-left", "down-right",
+    "up",
+    "down",
+    "left",
+    "right",
+    "up-left",
+    "up-right",
+    "down-left",
+    "down-right",
 )
 
 
@@ -29,7 +41,7 @@ class ButtonEvent:
     """A physical button transitioned between pressed and released."""
 
     side: Side
-    button: str          # lowercase pyjoycon name: "a", "zr", "r-stick", "plus"...
+    button: str  # lowercase pyjoycon name: "a", "zr", "r-stick", "plus"...
     pressed: bool
 
 

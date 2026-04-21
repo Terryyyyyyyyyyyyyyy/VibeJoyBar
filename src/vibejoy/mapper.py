@@ -300,15 +300,19 @@ class Mapper:
 
         elif isinstance(action, ShellAction):
             self._spawn_shell(
-                action.cmd, "pressed",
-                side=event.side, direction=event.direction,
+                action.cmd,
+                "pressed",
+                side=event.side,
+                direction=event.direction,
             )
             self._state.stick_shell_held[stick_id] = (action.cmd, event.direction)
 
         else:
             logger.warning(
                 "stick [%s.%s]: action type %s is not supported on sticks",
-                event.side, event.direction, type(action).__name__,
+                event.side,
+                event.direction,
+                type(action).__name__,
             )
 
     def _release_stick(self, stick_id: str, *, side: Side | None = None) -> None:
@@ -389,13 +393,17 @@ class Mapper:
 
     def _button_context_env(self, event: ShellEventKind, ev: ButtonEvent) -> dict[str, str]:
         return build_context_env(
-            event=event, button=ev.button, side=ev.side,
+            event=event,
+            button=ev.button,
+            side=ev.side,
             frontmost_app=get_frontmost_app(),
         )
 
     def _stick_context_env(self, event: ShellEventKind, ev: StickEvent) -> dict[str, str]:
         return build_context_env(
-            event=event, side=ev.side, direction=ev.direction,
+            event=event,
+            side=ev.side,
+            direction=ev.direction,
             frontmost_app=get_frontmost_app(),
         )
 

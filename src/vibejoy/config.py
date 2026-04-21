@@ -112,8 +112,7 @@ def load_config(path: str | Path | None = None) -> Config:
     resolved = resolve_config_path(path)
     if not resolved.is_file():
         raise ConfigError(
-            f"config file not found: {resolved}\n"
-            f"Run `vibejoy init` to create a starter config."
+            f"config file not found: {resolved}\nRun `vibejoy init` to create a starter config."
         )
     try:
         with resolved.open("rb") as f:
@@ -176,8 +175,7 @@ def _build_config(raw: dict[str, Any], *, source_path: Path | None) -> Config:
     unknown_top = set(raw) - {"global", "profile", "macro"}
     if unknown_top:
         raise ConfigError(
-            f"unknown top-level section(s): {sorted(unknown_top)}. "
-            f"Known: global, profile, macro"
+            f"unknown top-level section(s): {sorted(unknown_top)}. Known: global, profile, macro"
         )
 
     global_cfg = _build_global(raw.get("global") or {})
@@ -274,7 +272,10 @@ def _validate_profile(
             )
             continue
         _validate_action_spec(
-            f"profile.{side}.stick.{direction}", spec, macro_names, errors,
+            f"profile.{side}.stick.{direction}",
+            spec,
+            macro_names,
+            errors,
             allow_in_stick=True,
         )
 
@@ -292,6 +293,7 @@ def _validate_macro(name: str, macro: MacroDef, errors: list[str]) -> None:
         # Macros can't invoke other macros or window_switch — keeps semantics simple.
         from .actions import MacroRef as _MR  # local alias to avoid top-level cycle risk
         from .actions import WindowSwitchAction
+
         if isinstance(action, _MR):
             errors.append(f"macro.{name}.steps[{i}]: nested macro: is not allowed")
         elif isinstance(action, WindowSwitchAction):
@@ -314,6 +316,7 @@ def _validate_action_spec(
         return
 
     from .actions import AutoAction, DelayAction, TypeAction
+
     if isinstance(action, DelayAction):
         errors.append(f"{label}: 'delay:' only makes sense inside a macro")
     if isinstance(action, TypeAction) and not allow_in_stick:

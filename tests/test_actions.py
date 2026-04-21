@@ -72,12 +72,14 @@ class TestCombo:
 class TestSequence:
     def test_sequence_no_repeat(self) -> None:
         assert parse_action("sequence:alt+tab") == SequenceAction(
-            keys=("alt", "tab"), repeat_ms=0,
+            keys=("alt", "tab"),
+            repeat_ms=0,
         )
 
     def test_sequence_with_repeat(self) -> None:
         assert parse_action("sequence:cmd+tab@400") == SequenceAction(
-            keys=("cmd", "tab"), repeat_ms=400,
+            keys=("cmd", "tab"),
+            repeat_ms=400,
         )
 
     def test_sequence_needs_two_keys(self) -> None:

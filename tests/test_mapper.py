@@ -117,9 +117,7 @@ class TestAuto:
         mapper.on_event(ButtonEvent(side="right", button="x", pressed=False))
         assert kbd.events == [("tap", "f2")]
 
-    def test_long_press_becomes_hold(
-        self, kbd: FakeKeyboard, win: FakeWindow, monkeypatch
-    ) -> None:
+    def test_long_press_becomes_hold(self, kbd: FakeKeyboard, win: FakeWindow, monkeypatch) -> None:
         # Use a tiny threshold so the test completes instantly.
         mapper = Mapper(_config({"x": "auto:f2"}, long_press_ms=10), kbd, win)
         mapper.on_event(ButtonEvent(side="right", button="x", pressed=True))
@@ -137,7 +135,9 @@ class TestSequence:
         mapper.on_event(ButtonEvent(side="right", button="y", pressed=True))
         mapper.on_event(ButtonEvent(side="right", button="y", pressed=False))
         assert kbd.events == [
-            ("press", "cmd"), ("tap", "tab"), ("release", "cmd"),
+            ("press", "cmd"),
+            ("tap", "tab"),
+            ("release", "cmd"),
         ]
 
 
@@ -196,6 +196,7 @@ class _ShellRecorder:
 def shell_recorder(monkeypatch: pytest.MonkeyPatch) -> _ShellRecorder:
     rec = _ShellRecorder()
     import vibejoy.mapper as mapper_mod
+
     monkeypatch.setattr(mapper_mod, "run_shell", rec)
     # Also freeze get_frontmost_app so tests are deterministic across hosts.
     monkeypatch.setattr(mapper_mod, "get_frontmost_app", lambda: "TestApp")
@@ -204,7 +205,10 @@ def shell_recorder(monkeypatch: pytest.MonkeyPatch) -> _ShellRecorder:
 
 class TestShellButton:
     def test_press_and_release_both_fire(
-        self, kbd: FakeKeyboard, win: FakeWindow, shell_recorder: _ShellRecorder,
+        self,
+        kbd: FakeKeyboard,
+        win: FakeWindow,
+        shell_recorder: _ShellRecorder,
     ) -> None:
         mapper = Mapper(_config({"zr": "shell:echo hi"}), kbd, win)
         mapper.on_event(ButtonEvent(side="right", button="zr", pressed=True))
@@ -220,7 +224,10 @@ class TestShellButton:
         assert second["env"]["VIBEJOY_EVENT"] == "released"
 
     def test_keyboard_untouched(
-        self, kbd: FakeKeyboard, win: FakeWindow, shell_recorder: _ShellRecorder,
+        self,
+        kbd: FakeKeyboard,
+        win: FakeWindow,
+        shell_recorder: _ShellRecorder,
     ) -> None:
         mapper = Mapper(_config({"zr": "shell:true"}), kbd, win)
         mapper.on_event(ButtonEvent(side="right", button="zr", pressed=True))
@@ -230,7 +237,10 @@ class TestShellButton:
 
 class TestShellStick:
     def test_enter_and_center_fire(
-        self, kbd: FakeKeyboard, win: FakeWindow, shell_recorder: _ShellRecorder,
+        self,
+        kbd: FakeKeyboard,
+        win: FakeWindow,
+        shell_recorder: _ShellRecorder,
     ) -> None:
         mapper = Mapper(_config(right_stick={"up": "shell:echo up"}), kbd, win)
         mapper.on_event(StickEvent(side="right", direction="up"))
@@ -243,11 +253,15 @@ class TestShellStick:
         assert shell_recorder.calls[1]["env"]["VIBEJOY_DIRECTION"] == "up"
 
     def test_direction_change_fires_release_then_press(
-        self, kbd: FakeKeyboard, win: FakeWindow, shell_recorder: _ShellRecorder,
+        self,
+        kbd: FakeKeyboard,
+        win: FakeWindow,
+        shell_recorder: _ShellRecorder,
     ) -> None:
         mapper = Mapper(
             _config(right_stick={"up": "shell:A", "down": "shell:B"}),
-            kbd, win,
+            kbd,
+            win,
         )
         mapper.on_event(StickEvent(side="right", direction="up"))
         mapper.on_event(StickEvent(side="right", direction="down"))
@@ -258,7 +272,10 @@ class TestShellStick:
 
 class TestShellInMacro:
     def test_shell_step_runs_with_macro_event(
-        self, kbd: FakeKeyboard, win: FakeWindow, shell_recorder: _ShellRecorder,
+        self,
+        kbd: FakeKeyboard,
+        win: FakeWindow,
+        shell_recorder: _ShellRecorder,
     ) -> None:
         cfg = _config(
             right_buttons={"zr": "macro:hello"},

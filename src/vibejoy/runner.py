@@ -117,9 +117,11 @@ def _print_banner(readers: list[JoyConReader], config: Config) -> None:
     sides = ", ".join(r.side for r in readers)
     print(f"vibejoy ▶ connected: {sides}")
     print(f"         config: {config.source_path}")
-    print(f"         poll: {config.global_.poll_hz} Hz, "
-          f"deadzone: {config.global_.deadzone}, "
-          f"stick: {config.global_.stick_mode}")
+    print(
+        f"         poll: {config.global_.poll_hz} Hz, "
+        f"deadzone: {config.global_.deadzone}, "
+        f"stick: {config.global_.stick_mode}"
+    )
     print("         Ctrl+C to quit.")
 
 
@@ -156,13 +158,16 @@ def _start_control_server(
     def handle(request: Request) -> dict[str, Any]:
         if request.cmd == "ping":
             from . import __version__
+
             return {"pong": True, "version": __version__}
 
         if request.cmd == "status":
             return {
                 "sides": sorted(r.side for r in readers),
                 "calibration": {
-                    r.side: None if r.calibration is None else {
+                    r.side: None
+                    if r.calibration is None
+                    else {
                         "baseline_x": r.calibration.baseline_x,
                         "baseline_y": r.calibration.baseline_y,
                     }
@@ -179,7 +184,10 @@ def _start_control_server(
                 raise RuntimeError(f"no rumbler available for side={side_req!r}")
             for rumbler in targets:
                 rumbler.play(pulses)
-            return {"pattern": pattern_spec, "sides": sorted(t_side for t_side, _ in rumblers_by_side.items() if _ in targets)}
+            return {
+                "pattern": pattern_spec,
+                "sides": sorted(t_side for t_side, _ in rumblers_by_side.items() if _ in targets),
+            }
 
         raise ValueError(f"unknown command: {request.cmd!r}")
 

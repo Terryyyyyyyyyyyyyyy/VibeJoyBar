@@ -13,12 +13,14 @@ class TestResolveKey:
 
     def test_special_keys(self) -> None:
         from pynput.keyboard import Key
+
         assert resolve_key("enter") == Key.enter
         assert resolve_key("cmd") == Key.cmd
         assert resolve_key("shift") == Key.shift
 
     def test_aliases(self) -> None:
         from pynput.keyboard import Key
+
         assert resolve_key("return") == Key.enter
         assert resolve_key("option") == Key.alt
         assert resolve_key("esc") == Key.esc
@@ -26,11 +28,13 @@ class TestResolveKey:
 
     def test_function_keys(self) -> None:
         from pynput.keyboard import Key
+
         assert resolve_key("f1") == Key.f1
         assert resolve_key("f20") == Key.f20
 
     def test_case_insensitive(self) -> None:
         from pynput.keyboard import Key
+
         assert resolve_key("ENTER") == Key.enter
         assert resolve_key("Cmd") == Key.cmd
 
