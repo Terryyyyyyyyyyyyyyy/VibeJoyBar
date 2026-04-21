@@ -57,15 +57,15 @@ Grant **Accessibility** permission to your terminal the first time you run anyth
 # 1. Pair Joy-Con via Bluetooth (see `vibejoy doctor` for guidance)
 vibejoy doctor
 
-# 2. Generate a starter config
-vibejoy init                       # writes ~/.config/vibejoy/config.toml
+# 2. Start the daemon — first run writes a starter config automatically
+vibejoy run
+#   first run: wrote starter config to ~/.config/vibejoy/config.toml
+#              edit to customize, then `vibejoy validate` to re-check
 
-# 3. Edit config.toml — or let an AI edit it
+# 3. Edit the config — by hand or via AI
 $EDITOR ~/.config/vibejoy/config.toml
 vibejoy validate                   # catches typos
-
-# 4. Start the daemon
-vibejoy run
+vibejoy run                        # pick up the new bindings
 ```
 
 The daemon autodetects whichever Joy-Cons are paired and applies the matching profile (`profile.right` / `profile.left`).
@@ -175,11 +175,10 @@ Binding a button to `shell:` gives `config.toml` the same authority as a shell s
 ## CLI Reference
 
 ```
-vibejoy run           start the mapping daemon
+vibejoy run           start the mapping daemon (auto-creates config on first run)
 vibejoy validate      parse + type-check config, exit non-zero on error
 vibejoy discover      live dump of button / stick events (for authoring)
 vibejoy doctor        probe environment: Joy-Con, permissions, IPC
-vibejoy init          write starter config.toml
 vibejoy rumble        trigger rumble (via daemon if running, else direct HID)
 vibejoy schema        print the annotated starter config
 ```

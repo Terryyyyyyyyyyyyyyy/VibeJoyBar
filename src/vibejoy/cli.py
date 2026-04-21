@@ -2,11 +2,11 @@
 
 Subcommands
 -----------
-- ``run``        Start the mapping daemon.
+- ``run``        Start the mapping daemon. On first run, auto-creates a
+                 starter config at the resolved path if none exists.
 - ``validate``   Parse + type-check a config file, exit non-zero on error.
 - ``discover``   Live dump of button / stick events (for config authoring).
 - ``doctor``     Probe the environment: Joy-Con presence, pynput permissions, IPC.
-- ``init``       Write the bundled starter config to a path.
 - ``rumble``     Trigger a rumble (goes through the running daemon if present,
                  otherwise opens HID directly).
 - ``schema``     Print the config's reference example — useful for AI copilots.
@@ -19,7 +19,6 @@ import json
 import logging
 import sys
 import time
-from pathlib import Path
 
 from . import __version__
 from .config import (
@@ -67,7 +66,10 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-v", "--verbose", action="store_true", help="enable DEBUG logging")
     sub = parser.add_subparsers(dest="cmd", required=True, metavar="<command>")
 
-    p_run = sub.add_parser("run", help="start the mapping daemon")
+    p_run = sub.add_parser(
+        "run",
+        help="start the mapping daemon (auto-creates starter config on first run)",
+    )
     p_run.add_argument("-c", "--config", help="path to config.toml")
 
     p_val = sub.add_parser("validate", help="validate a config file")
@@ -76,10 +78,6 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("discover", help="live dump of button / stick events")
 
     sub.add_parser("doctor", help="probe environment + Joy-Con + daemon health")
-
-    p_init = sub.add_parser("init", help="write starter config.toml")
-    p_init.add_argument("path", nargs="?", help="target path (default: XDG location)")
-    p_init.add_argument("--force", action="store_true", help="overwrite existing file")
 
     p_rumble = sub.add_parser("rumble", help="trigger rumble")
     p_rumble.add_argument(
@@ -119,6 +117,7 @@ def _setup_logging(*, verbose: bool) -> None:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
+    _ensure_config_exists(args.config)
     from .runner import run
 
     result = run(config_path=args.config)
@@ -171,7 +170,7 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
             problems += 1
             print(f"✗ config  {cfg_path}\n    {e}")
     else:
-        print(f"  config  {cfg_path} (missing — run `vibejoy init`)")
+        print(f"  config  {cfg_path} (not yet created — will be on first `vibejoy run`)")
 
     # 2. Joy-Con presence
     readers = discover_readers()
@@ -220,17 +219,6 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
         return 0
     print(f"{problems} problem(s) found.")
     return 1
-
-
-def cmd_init(args: argparse.Namespace) -> int:
-    target = Path(args.path).expanduser() if args.path else default_config_path()
-    if target.exists() and not args.force:
-        print(f"refusing to overwrite {target} (use --force)", file=sys.stderr)
-        return 1
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(read_example_config(), encoding="utf-8")
-    print(f"wrote starter config to {target}")
-    return 0
 
 
 def cmd_rumble(args: argparse.Namespace) -> int:
@@ -285,6 +273,25 @@ def cmd_schema(_args: argparse.Namespace) -> int:
 # ---------- Helpers ----------
 
 
+def _ensure_config_exists(explicit: str | None) -> None:
+    """Write the starter config at the resolved path if it doesn't already exist.
+
+    First-run UX: a user fresh off ``pip install vibejoy`` should be able to
+    type ``vibejoy run`` once and have it Just Work with sensible defaults,
+    while seeing exactly where the file landed so they can edit it.
+    """
+    resolved = resolve_config_path(explicit)
+    if resolved.is_file():
+        return
+
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    resolved.write_text(read_example_config(), encoding="utf-8")
+    # Flush so the notice shows before the runner's logging output (which
+    # goes to stderr and is unbuffered), especially when stdout is piped.
+    print(f"first run: wrote starter config to {resolved}", flush=True)
+    print("           edit to customize, then `vibejoy validate` to re-check", flush=True)
+
+
 def _print_event(event: ButtonEvent | StickEvent) -> None:
     if isinstance(event, ButtonEvent):
         arrow = "↓" if event.pressed else "↑"
@@ -301,7 +308,6 @@ _HANDLERS: dict[str, callable] = {
     "validate": cmd_validate,
     "discover": cmd_discover,
     "doctor": cmd_doctor,
-    "init": cmd_init,
     "rumble": cmd_rumble,
     "schema": cmd_schema,
 }

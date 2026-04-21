@@ -112,7 +112,9 @@ def load_config(path: str | Path | None = None) -> Config:
     resolved = resolve_config_path(path)
     if not resolved.is_file():
         raise ConfigError(
-            f"config file not found: {resolved}\nRun `vibejoy init` to create a starter config."
+            f"config file not found: {resolved}\n"
+            f"Run `vibejoy run` to auto-create one with defaults, "
+            f"or pass an explicit --config path that exists."
         )
     try:
         with resolved.open("rb") as f:
@@ -157,8 +159,8 @@ def validate_config(cfg: Config) -> list[str]:
 def read_example_config() -> str:
     """Return the bundled ``config.example.toml`` as text.
 
-    Used by ``vibejoy init`` and ``vibejoy schema`` so there's one source
-    of truth for the default configuration.
+    Used by ``vibejoy schema`` and by the first-run auto-create path so
+    there's one source of truth for the default configuration.
     """
     try:
         return resources.files("vibejoy").joinpath(EXAMPLE_CONFIG_RESOURCE).read_text("utf-8")

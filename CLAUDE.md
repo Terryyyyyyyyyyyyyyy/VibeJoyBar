@@ -13,7 +13,7 @@ Each file is one responsibility — don't spread logic across modules.
 
 | File | Owns |
 |---|---|
-| `cli.py` | argparse subcommands (run / validate / discover / doctor / init / rumble / schema) |
+| `cli.py` | argparse subcommands (run / validate / discover / doctor / rumble / schema); `run` auto-creates missing config |
 | `config.py` | TOML loading, path resolution, strict validation |
 | `events.py` | `ButtonEvent` / `StickEvent` frozen dataclasses |
 | `actions.py` | Action DSL types + `parse_action` (the vocabulary users bind) |

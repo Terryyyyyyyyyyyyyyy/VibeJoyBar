@@ -118,10 +118,6 @@ class Mapper:
         self._keyboard.release_all()
         self._state = _MapperState()
 
-    def update_window_apps(self, apps: tuple[str, ...]) -> None:
-        """Replace the window switcher's app list (used when config reloads)."""
-        self._window.set_queries(apps)
-
     # ---------- Button handling ----------
 
     def _on_button(self, event: ButtonEvent) -> None:

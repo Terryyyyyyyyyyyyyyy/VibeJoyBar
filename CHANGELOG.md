@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-04-22
+
+### Changed
+- **First-run UX**: `vibejoy run` now auto-creates a starter config at
+  the resolved path (defaults to `~/.config/vibejoy/config.toml`) when
+  none exists, printing a one-line notice that tells the user exactly
+  where the file landed. Eliminates the "install → run → wall → look up
+  command → retry" dance for new users.
+- `vibejoy doctor`'s message about a missing config now reads
+  "will be created on first `vibejoy run`" instead of pointing at
+  a command that no longer exists.
+- `load_config` error message now suggests `vibejoy run` or an explicit
+  `--config` path when the file is missing.
+
+### Removed
+- **`vibejoy init` subcommand**. `run` handles first-time creation
+  automatically; `schema` continues to print the reference example for
+  AI copilots or stdout-piping. One less command, one less step.
+- Dead code: `Mapper.update_window_apps()` had no callers.
+
+### Notes
+- This is a breaking CLI change. Scripts that used `vibejoy init` should
+  either delete the call (if they followed it with `vibejoy run`), or
+  replace it with `vibejoy schema > path/to/config.toml` if they need
+  an explicit write-to-custom-path step.
+
 ## [0.1.0] — 2026-04-21
 
 ### Added
@@ -31,7 +57,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   processes trigger rumble while the daemon holds the HID handle — the
   motivating use case is Claude Code hooks buzzing your hand on `Stop` /
   `Error` events.
-- CLI: `vibejoy run | validate | discover | doctor | init | rumble | schema`.
+- CLI: `vibejoy run | validate | discover | doctor | init | rumble | schema`
+  (note: `init` was removed in 0.2.0 in favor of auto-create on `run`).
 - `vibejoy doctor` probes Joy-Con presence, Accessibility permission, window
   access, and daemon socket health in one command.
 - 104 unit tests, 0.4 s wall-clock, no physical controller required.
@@ -40,5 +67,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automated PyPI publishing via OIDC Trusted Publishing on `v*` tags,
   gated by the `release` environment for manual approval.
 
-[Unreleased]: https://github.com/WEIFENG2333/vibejoy/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/WEIFENG2333/vibejoy/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/WEIFENG2333/vibejoy/releases/tag/v0.2.0
 [0.1.0]: https://github.com/WEIFENG2333/vibejoy/releases/tag/v0.1.0
