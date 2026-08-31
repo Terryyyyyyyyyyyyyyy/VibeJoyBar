@@ -17,7 +17,7 @@ from __future__ import annotations
 import logging
 import math
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -42,6 +42,7 @@ Prevents flicker when the stick crosses zero on fast flicks."""
 
 _DEFAULT_CALIBRATION_SAMPLES: int = 20
 _DEFAULT_CALIBRATION_INTERVAL_S: float = 0.01
+DEFAULT_HEARTBEAT_TIMEOUT_S: float = 2.0
 
 
 @dataclass(slots=True)
@@ -80,6 +81,8 @@ class JoyConReader:
         *,
         deadzone: float = DEFAULT_DEADZONE,
         stick_mode: StickMode = DEFAULT_STICK_MODE,
+        heartbeat_timeout_s: float = DEFAULT_HEARTBEAT_TIMEOUT_S,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         if not 0.0 <= deadzone < 1.0:
             raise ValueError(f"deadzone must be in [0, 1), got {deadzone}")
@@ -87,9 +90,14 @@ class JoyConReader:
         self._side: Side = side
         self._deadzone = deadzone
         self._stick_mode: StickMode = stick_mode
+        self._heartbeat_timeout_s = heartbeat_timeout_s
+        self._clock = clock
+        self._last_report: bytes | None = None
+        self._last_report_change_at: float | None = None
         self._state = _ReaderState()
         self._calibration: StickCalibration | None = None
         self._rumbler = Rumbler(joycon._joycon_device, side_name=side)
+        self._connected = True
 
     # ---------- Public API ----------
 
@@ -106,6 +114,18 @@ class JoyConReader:
     def calibration(self) -> StickCalibration | None:
         return self._calibration
 
+    @property
+    def is_connected(self) -> bool:
+        """Whether the last HID poll succeeded."""
+        return self._connected
+
+    @property
+    def heartbeat_age(self) -> float | None:
+        """Seconds since the last fresh raw input report, when available."""
+        if self._last_report_change_at is None:
+            return None
+        return max(0.0, self._clock() - self._last_report_change_at)
+
     def calibrate(
         self,
         *,
@@ -120,7 +140,11 @@ class JoyConReader:
         sum_x = 0
         sum_y = 0
         for _ in range(samples):
-            raw_x, raw_y = self._read_raw_stick()
+            try:
+                raw_x, raw_y = self._read_raw_stick()
+            except OSError:
+                self._mark_disconnected()
+                raise
             sum_x += raw_x
             sum_y += raw_y
             time.sleep(interval_s)
@@ -141,10 +165,15 @@ class JoyConReader:
 
     def poll(self) -> Iterator[Event]:
         """Read current state and yield one ``Event`` per change since last poll."""
+        if not self._connected:
+            return
+        if not self._observe_raw_report():
+            return
         try:
             status = self._joycon.get_status()
         except OSError as e:
             logger.warning("%s joycon disconnected during poll: %s", self._side, e)
+            self._mark_disconnected()
             return
 
         yield from self._diff_buttons(status)
@@ -152,10 +181,28 @@ class JoyConReader:
 
     def close(self) -> None:
         """Best-effort cleanup. Safe to call multiple times."""
+        self._mark_disconnected()
+
+    def _mark_disconnected(self) -> None:
+        if not self._connected:
+            return
+        self._connected = False
         try:
             self._rumbler.stop()
         except Exception:  # pragma: no cover
             logger.debug("%s rumbler.stop failed", self._side, exc_info=True)
+        try:
+            self._rumbler.close()
+        except Exception:  # pragma: no cover
+            logger.debug("%s rumbler.close failed", self._side, exc_info=True)
+        # pyjoycon keeps the actual hid.device on _joycon_device. Close it
+        # explicitly because a failed read can bypass JoyCon's normal cleanup.
+        try:
+            device = getattr(self._joycon, "_joycon_device", None)
+            if device is not None and hasattr(device, "close"):
+                device.close()
+        except Exception:  # pragma: no cover
+            logger.debug("%s HID close failed", self._side, exc_info=True)
 
     # ---------- Internals ----------
 
@@ -200,6 +247,35 @@ class JoyConReader:
         status = self._joycon.get_status()
         return _read_stick_from_status(status, self._side)
 
+    def _observe_raw_report(self) -> bool:
+        """Detect a pyjoycon reader thread that stopped updating its cache.
+
+        ``JoyCon.get_status()`` decodes the last cached report, so a sleeping
+        controller can look healthy forever. The input-report timer changes
+        on every live frame; compare a copied snapshot and only enforce the
+        timeout when a real, non-zero report has been observed. Objects that
+        do not expose ``_input_report`` keep the existing OSError behavior.
+        """
+        try:
+            raw = getattr(self._joycon, "_input_report", None)
+            if raw is None:
+                return True
+            snapshot = bytes(raw)
+        except Exception:
+            return True
+        if not snapshot or not any(snapshot):
+            return True
+        now = self._clock()
+        if snapshot != self._last_report:
+            self._last_report = snapshot
+            self._last_report_change_at = now
+            return True
+        if self._last_report_change_at is not None and now - self._last_report_change_at > self._heartbeat_timeout_s:
+            logger.warning("%s joycon raw report stalled for %.1fs", self._side, now - self._last_report_change_at)
+            self._mark_disconnected()
+            return False
+        return True
+
 
 # ---------- Discovery ----------
 
@@ -208,14 +284,18 @@ def discover_readers(
     *,
     deadzone: float = DEFAULT_DEADZONE,
     stick_mode: StickMode = DEFAULT_STICK_MODE,
+    sides: Iterable[Side] | None = None,
 ) -> list[JoyConReader]:
     """Open every Joy-Con currently paired over Bluetooth and wrap as readers.
 
-    Returns an empty list if none are found; callers decide how to react.
+    ``sides`` can limit probing to disconnected sides; this avoids opening a
+    duplicate HID handle for a controller that is already live. Returns an
+    empty list if none are found; callers decide how to react.
     """
     readers: list[JoyConReader] = []
-    r_id = get_R_id()
-    l_id = get_L_id()
+    requested = set(sides) if sides is not None else {"right", "left"}
+    r_id = get_R_id() if "right" in requested else (None, None)
+    l_id = get_L_id() if "left" in requested else (None, None)
 
     if r_id[0] is not None:
         try:

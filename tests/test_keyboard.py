@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from vibejoy.keyboard import UnknownKeyError, is_known_key, resolve_key
+from vibejoy.keyboard import KeyboardOutput, UnknownKeyError, is_known_key, resolve_key
 
 
 class TestResolveKey:
@@ -52,3 +52,38 @@ class TestIsKnownKey:
     def test_false_cases(self) -> None:
         assert not is_known_key("explode")
         assert not is_known_key("")
+
+
+class _FakeController:
+    def __init__(self) -> None:
+        self._mapping = {}
+        self.events: list[tuple[str, object]] = []
+
+    def press(self, key: object) -> None:
+        self.events.append(("press", key))
+
+    def release(self, key: object) -> None:
+        self.events.append(("release", key))
+
+
+def test_option_zero_uses_native_keycode_and_modifier_flags(monkeypatch) -> None:
+    import vibejoy.keyboard as keyboard_mod
+
+    posted: list[tuple[int, bool, int]] = []
+    monkeypatch.setattr(keyboard_mod, "CGEventCreateKeyboardEvent", object())
+    monkeypatch.setattr(
+        keyboard_mod,
+        "_post_macos_key_event",
+        lambda keycode, pressed, flags: posted.append((keycode, pressed, flags)) or True,
+    )
+
+    output = KeyboardOutput(controller=_FakeController())
+    output.combo(("option", "0"), hold=0)
+
+    alt_flag = keyboard_mod._MODIFIER_FLAGS[keyboard_mod.Key.alt]
+    assert posted == [
+        (0x3A, True, alt_flag),
+        (0x1D, True, alt_flag),
+        (0x1D, False, alt_flag),
+        (0x3A, False, 0),
+    ]

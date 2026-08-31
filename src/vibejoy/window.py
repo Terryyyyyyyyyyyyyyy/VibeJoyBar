@@ -5,8 +5,9 @@ Users list apps by any of:
 - localized name (``Safari``, ``Visual Studio Code``)
 - executable hint (``code``, ``safari``)
 
-Matching is case-insensitive and substring-tolerant; the first running app
-that matches wins. Apps that aren't running are skipped silently — users
+Matching is case-insensitive and substring-tolerant, with exact bundle ID,
+localized name, and executable matches preferred over substring aliases. Apps
+that aren't running are skipped silently — users
 can launch them separately.
 
 The single entry point ``WindowSwitcher.step()`` cycles focus through the
@@ -45,7 +46,7 @@ class AppInfo:
     executable: str
 
     def matches(self, query: str) -> bool:
-        """Case-insensitive substring match against bundle_id / name / executable."""
+        """Case-insensitive match against bundle id/name/executable."""
         q = query.strip().lower()
         if not q:
             return False
@@ -90,11 +91,8 @@ def list_running_apps() -> list[AppInfo]:
 
 
 def find_app(query: str) -> AppInfo | None:
-    """First running app matching ``query``, or None."""
-    for app in list_running_apps():
-        if app.matches(query):
-            return app
-    return None
+    """Best ranked running app matching ``query``, or None."""
+    return _first_match(list_running_apps(), query)
 
 
 def activate_app(app: AppInfo) -> bool:
@@ -126,8 +124,16 @@ class WindowSwitcher:
         return self._queries
 
     def set_queries(self, queries: list[str] | tuple[str, ...]) -> None:
-        """Replace the cycle list. Resets the cursor."""
-        self._queries = tuple(queries)
+        """Replace the cycle list, resetting only when the list changed.
+
+        The mapper supplies the binding's app list on every button press. If
+        an unchanged list reset the cursor each time, every press would focus
+        its first live app instead of advancing through the cycle.
+        """
+        updated = tuple(queries)
+        if updated == self._queries:
+            return
+        self._queries = updated
         self._index = -1
 
     def step(self) -> AppInfo | None:
@@ -150,7 +156,33 @@ class WindowSwitcher:
 
 
 def _first_match(apps: list[AppInfo], query: str) -> AppInfo | None:
-    for a in apps:
-        if a.matches(query):
-            return a
-    return None
+    q = query.strip().casefold()
+    if not q:
+        return None
+
+    # Do not let NSWorkspace enumeration order decide which similarly named
+    # app receives focus. Exact identifiers are the strongest user intent,
+    # followed by exact display/executable names, then a conservative alias
+    # for Codex (whose localized name is ChatGPT).
+    def rank(app: AppInfo) -> tuple[int, int]:
+        bundle = app.bundle_id.casefold()
+        name = app.name.casefold()
+        executable = app.executable.casefold()
+        if q == bundle:
+            return (0, 0)
+        if q == name:
+            return (1, 0)
+        if q == executable:
+            return (2, 0)
+        if q == "codex" and bundle == "com.openai.codex":
+            return (3, 0)
+        if q in bundle or q in name or q in executable:
+            return (4, 0)
+        return (99, 0)
+
+    matches = [(rank(app), index, app) for index, app in enumerate(apps)]
+    matches = [item for item in matches if item[0][0] < 99]
+    if not matches:
+        return None
+    _, _, result = min(matches, key=lambda item: (item[0], item[1]))
+    return result

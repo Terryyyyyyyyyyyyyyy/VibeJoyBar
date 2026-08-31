@@ -169,6 +169,43 @@ class TestWindowSwitch:
         assert win.steps == 1
 
 
+class TestAppSwitcher:
+    def test_press_release_is_quick_system_switch(self, kbd: FakeKeyboard, win: FakeWindow) -> None:
+        mapper = Mapper(_config({"zr": "app_switcher:system"}, right_stick={"right": "tap:right"}), kbd, win)
+        mapper.on_event(ButtonEvent(side="right", button="zr", pressed=True))
+        mapper.on_event(ButtonEvent(side="right", button="zr", pressed=False))
+        assert kbd.events == [("press", "cmd"), ("tap", "tab"), ("release", "cmd")]
+
+    def test_right_stick_navigates_forward_while_held(self, kbd: FakeKeyboard, win: FakeWindow) -> None:
+        mapper = Mapper(_config({"zr": "app_switcher:system"}, right_stick={"right": "tap:right", "left": "tap:left"}), kbd, win)
+        mapper.on_event(ButtonEvent(side="right", button="zr", pressed=True))
+        mapper.on_event(StickEvent(side="right", direction="right"))
+        mapper.on_event(StickEvent(side="right", direction=None))
+        assert kbd.events == [("press", "cmd"), ("tap", "tab"), ("tap", "tab")]
+
+    def test_left_stick_navigates_backward_and_center_is_noop(self, kbd: FakeKeyboard, win: FakeWindow) -> None:
+        mapper = Mapper(_config({"zr": "app_switcher:system"}, right_stick={"left": "tap:left"}), kbd, win)
+        mapper.on_event(ButtonEvent(side="right", button="zr", pressed=True))
+        mapper.on_event(StickEvent(side="right", direction="left"))
+        mapper.on_event(StickEvent(side="right", direction=None))
+        mapper.on_event(ButtonEvent(side="right", button="zr", pressed=False))
+        assert kbd.events == [
+            ("press", "cmd"),
+            ("tap", "tab"),
+            ("press", "shift"),
+            ("tap", "tab"),
+            ("release", "shift"),
+            ("release", "cmd"),
+        ]
+
+    def test_disconnect_cleanup_releases_cmd(self, kbd: FakeKeyboard, win: FakeWindow) -> None:
+        mapper = Mapper(_config({"zr": "app_switcher:system"}), kbd, win)
+        mapper.on_event(ButtonEvent(side="right", button="zr", pressed=True))
+        mapper.release_all()
+        assert kbd.events[-1] == ("release_all", None)
+        mapper.on_event(ButtonEvent(side="right", button="zr", pressed=False))
+
+
 class TestReleaseAll:
     def test_clears_state(self, kbd: FakeKeyboard, win: FakeWindow) -> None:
         mapper = Mapper(_config({"sl": "hold:shift"}), kbd, win)

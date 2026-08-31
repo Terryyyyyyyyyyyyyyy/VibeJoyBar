@@ -17,7 +17,7 @@ from typing import Any
 
 from .config import Config, load_config
 from .events import Side
-from .ipc import ControlServer, Request
+from .ipc import ControlServer, Request, is_daemon_running
 from .joycon import JoyConReader, discover_readers
 from .keyboard import KeyboardOutput
 from .mapper import Mapper
@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 NO_CONTROLLER_EXIT_CODE: int = 2
+ALREADY_RUNNING_EXIT_CODE: int = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +50,12 @@ def run(
     ``stop_event`` lets tests / embedders request a graceful shutdown.
     If ``install_signal_handlers`` is True we hook SIGINT/SIGTERM.
     """
+    if is_daemon_running():
+        return RunResult(
+            exit_code=ALREADY_RUNNING_EXIT_CODE,
+            message="another VibeJoy daemon is already running",
+        )
+
     config = load_config(config_path)
     logger.info("loaded config from %s", config.source_path)
 
@@ -56,12 +63,6 @@ def run(
         deadzone=config.global_.deadzone,
         stick_mode=config.global_.stick_mode,
     )
-    if not readers:
-        return RunResult(
-            exit_code=NO_CONTROLLER_EXIT_CODE,
-            message="no Joy-Con is currently paired/connected — run `vibejoy doctor`",
-        )
-
     stop_event = stop_event or threading.Event()
     if install_signal_handlers:
         _install_signal_handlers(stop_event)
@@ -70,13 +71,15 @@ def run(
     window = WindowSwitcher(queries=())
     mapper = Mapper(config=config, keyboard_out=keyboard_out, window_switcher=window)
 
-    rumblers_by_side: dict[Side, Rumbler] = {r.side: r.rumbler for r in readers}
-    control_server = _start_control_server(rumblers_by_side, readers)
+    rumblers_by_side: dict[Side, Rumbler] = {}
+    control_server: ControlServer | None = None
 
     try:
-        _calibrate_all(readers)
+        _calibrate_available(readers)
+        rumblers_by_side.update({r.side: r.rumbler for r in readers})
+        control_server = _start_control_server(rumblers_by_side, readers, stop_event)
         _print_banner(readers, config)
-        _main_loop(readers, mapper, config, stop_event)
+        _main_loop(readers, mapper, config, stop_event, rumblers_by_side=rumblers_by_side)
     except KeyboardInterrupt:
         pass
     except WindowSwitchUnavailableError as e:
@@ -113,16 +116,28 @@ def _calibrate_all(readers: Iterable[JoyConReader]) -> None:
         reader.calibrate()
 
 
+def _calibrate_available(readers: list[JoyConReader]) -> None:
+    """Calibrate connected readers, dropping any that sleep during startup."""
+    for reader in list(readers):
+        try:
+            reader.calibrate()
+        except OSError:
+            reader.close()
+            readers.remove(reader)
+            print(f"vibejoy ▶ disconnected: {reader.side}", flush=True)
+
+
 def _print_banner(readers: list[JoyConReader], config: Config) -> None:
     sides = ", ".join(r.side for r in readers)
-    print(f"vibejoy ▶ connected: {sides}")
-    print(f"         config: {config.source_path}")
+    print(f"vibejoy ▶ connected: {sides}" if sides else "vibejoy ▶ waiting: no Joy-Con", flush=True)
+    print(f"         config: {config.source_path}", flush=True)
     print(
         f"         poll: {config.global_.poll_hz} Hz, "
         f"deadzone: {config.global_.deadzone}, "
-        f"stick: {config.global_.stick_mode}"
+        f"stick: {config.global_.stick_mode}",
+        flush=True,
     )
-    print("         Ctrl+C to quit.")
+    print("         Ctrl+C to quit.", flush=True)
 
 
 def _main_loop(
@@ -130,14 +145,28 @@ def _main_loop(
     mapper: Mapper,
     config: Config,
     stop_event: threading.Event,
+    *,
+    rumblers_by_side: dict[Side, Rumbler] | None = None,
 ) -> None:
     interval = 1.0 / max(1, config.global_.poll_hz)
+    rediscover_after = 0.0
+    rumblers_by_side = rumblers_by_side if rumblers_by_side is not None else {}
     while not stop_event.is_set():
         loop_start = time.monotonic()
-        for reader in readers:
+        for reader in list(readers):
+            if not reader.is_connected:
+                _drop_reader(reader, readers, mapper, rumblers_by_side)
+                continue
             for event in reader.poll():
                 mapper.on_event(event)
+            if not reader.is_connected:
+                _drop_reader(reader, readers, mapper, rumblers_by_side)
         mapper.poll()
+
+        now = time.monotonic()
+        if now >= rediscover_after:
+            rediscover_after = now + 2.0
+            _rediscover_missing(readers, mapper, config, rumblers_by_side)
 
         elapsed = time.monotonic() - loop_start
         remaining = interval - elapsed
@@ -146,12 +175,56 @@ def _main_loop(
             stop_event.wait(timeout=remaining)
 
 
+def _drop_reader(
+    reader: JoyConReader,
+    readers: list[JoyConReader],
+    mapper: Mapper,
+    rumblers_by_side: dict[Side, Rumbler],
+) -> None:
+    if reader in readers:
+        readers.remove(reader)
+    rumblers_by_side.pop(reader.side, None)
+    mapper.release_all()
+    reader.close()
+    print(f"vibejoy ▶ disconnected: {reader.side}; waiting for reconnect", flush=True)
+
+
+def _rediscover_missing(
+    readers: list[JoyConReader],
+    mapper: Mapper,
+    config: Config,
+    rumblers_by_side: dict[Side, Rumbler],
+) -> None:
+    existing = {reader.side for reader in readers if reader.is_connected}
+    missing = {"right", "left"} - existing
+    if not missing:
+        return
+    discovered = discover_readers(
+        deadzone=config.global_.deadzone,
+        stick_mode=config.global_.stick_mode,
+        sides=missing,
+    )
+    for reader in discovered:
+        if reader.side in existing:
+            reader.close()
+            continue
+        try:
+            reader.calibrate()
+        except OSError:
+            reader.close()
+            continue
+        readers.append(reader)
+        rumblers_by_side[reader.side] = reader.rumbler
+        print(f"vibejoy ▶ connected: {reader.side} (reconnected)", flush=True)
+
+
 # ---------- IPC ----------
 
 
 def _start_control_server(
     rumblers_by_side: dict[Side, Rumbler],
     readers: list[JoyConReader],
+    stop_event: threading.Event,
 ) -> ControlServer | None:
     """Install the IPC handler. Failure to bind is non-fatal."""
 
@@ -162,18 +235,24 @@ def _start_control_server(
             return {"pong": True, "version": __version__}
 
         if request.cmd == "status":
+            live_readers = [r for r in readers if r.is_connected]
             return {
-                "sides": sorted(r.side for r in readers),
+                "sides": sorted(r.side for r in live_readers),
                 "calibration": {
                     r.side: None
-                    if r.calibration is None
+                    if r.calibration is None or not r.is_connected
                     else {
                         "baseline_x": r.calibration.baseline_x,
                         "baseline_y": r.calibration.baseline_y,
                     }
                     for r in readers
                 },
+                "heartbeat_age": {r.side: r.heartbeat_age for r in live_readers},
             }
+
+        if request.cmd == "stop":
+            stop_event.set()
+            return {"stopping": True}
 
         if request.cmd == "rumble":
             pattern_spec = str(request.args.get("pattern") or "short")

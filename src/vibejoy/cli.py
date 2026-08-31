@@ -7,6 +7,8 @@ Subcommands
 - ``validate``   Parse + type-check a config file, exit non-zero on error.
 - ``discover``   Live dump of button / stick events (for config authoring).
 - ``doctor``     Probe the environment: Joy-Con presence, pynput permissions, IPC.
+- ``permission`` Check or request keyboard-event posting permission.
+- ``stop``       Gracefully stop the running mapping daemon.
 - ``rumble``     Trigger a rumble (goes through the running daemon if present,
                  otherwise opens HID directly).
 - ``schema``     Print the config's reference example — useful for AI copilots.
@@ -78,6 +80,18 @@ def _build_parser() -> argparse.ArgumentParser:
     sub.add_parser("discover", help="live dump of button / stick events")
 
     sub.add_parser("doctor", help="probe environment + Joy-Con + daemon health")
+
+    p_permission = sub.add_parser(
+        "permission",
+        help="check the current Python process keyboard-event permission",
+    )
+    p_permission.add_argument(
+        "--request",
+        action="store_true",
+        help="ask macOS to show its permission prompt when access is missing",
+    )
+
+    sub.add_parser("stop", help="gracefully stop the running mapping daemon")
 
     p_rumble = sub.add_parser("rumble", help="trigger rumble")
     p_rumble.add_argument(
@@ -221,6 +235,35 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     return 1
 
 
+def cmd_stop(_args: argparse.Namespace) -> int:
+    try:
+        reply = ipc_call({"cmd": "stop"})
+    except IPCError as e:
+        print(f"no controllable VibeJoy daemon: {e}", file=sys.stderr)
+        return 2
+    if reply.get("stopping"):
+        print("VibeJoy daemon is stopping")
+    return 0
+
+
+def cmd_permission(args: argparse.Namespace) -> int:
+    from ApplicationServices import AXIsProcessTrusted
+    from Quartz import CGPreflightPostEventAccess, CGRequestPostEventAccess
+
+    trusted = bool(AXIsProcessTrusted()) and bool(CGPreflightPostEventAccess())
+    if not trusted and args.request:
+        trusted = bool(CGRequestPostEventAccess())
+    if trusted:
+        print("keyboard-event permission granted")
+        return 0
+    print(f"keyboard-event permission missing for: {sys.executable}", file=sys.stderr)
+    print(
+        "enable this Python executable in System Settings → Privacy & Security → Accessibility",
+        file=sys.stderr,
+    )
+    return 4
+
+
 def cmd_rumble(args: argparse.Namespace) -> int:
     # Parse pattern eagerly so we surface bad input regardless of delivery path.
     try:
@@ -308,6 +351,8 @@ _HANDLERS: dict[str, callable] = {
     "validate": cmd_validate,
     "discover": cmd_discover,
     "doctor": cmd_doctor,
+    "permission": cmd_permission,
+    "stop": cmd_stop,
     "rumble": cmd_rumble,
     "schema": cmd_schema,
 }

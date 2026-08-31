@@ -17,6 +17,7 @@ Grammar
     delay:<ms>                 # wait N ms (macro use only)
     macro:<name>               # invoke a [macro.<name>] from config
     window_switch:<app1>,<app2>,...  # cycle focus between apps
+    app_switcher:system           # hold Cmd+Tab; stick left/right moves selection
     shell:<command>            # run shell command, non-blocking, fires on both press and release
 
 Key names are lowercase; modifiers are ``cmd`` / ``shift`` / ``ctrl`` /
@@ -97,6 +98,13 @@ class WindowSwitchAction:
 
 
 @dataclass(frozen=True, slots=True)
+class AppSwitcherAction:
+    """Hold the macOS app switcher while a controller button is held."""
+
+    mode: str = "system"
+
+
+@dataclass(frozen=True, slots=True)
 class ShellAction:
     """Run a shell command via ``/bin/sh -c``. Fires on both press and release."""
 
@@ -115,6 +123,7 @@ Action: TypeAlias = (
     | DelayAction
     | MacroRef
     | WindowSwitchAction
+    | AppSwitcherAction
     | ShellAction
 )
 
@@ -228,6 +237,13 @@ def _parse_window_switch(payload: str, _raw: str) -> Action:
     return WindowSwitchAction(apps=apps)
 
 
+def _parse_app_switcher(payload: str, raw: str) -> Action:
+    mode = payload.strip().lower()
+    if mode != "system":
+        raise ActionParseError(f"app_switcher only supports 'system', got {raw!r}")
+    return AppSwitcherAction(mode=mode)
+
+
 def _parse_shell(payload: str, _raw: str) -> Action:
     # Preserve internal whitespace verbatim — users may have meaningful spaces
     # inside quoted arguments. Only strip surrounding whitespace (already done
@@ -248,6 +264,7 @@ _PARSERS: dict[str, callable] = {
     "delay": _parse_delay,
     "macro": _parse_macro,
     "window_switch": _parse_window_switch,
+    "app_switcher": _parse_app_switcher,
     "shell": _parse_shell,
 }
 

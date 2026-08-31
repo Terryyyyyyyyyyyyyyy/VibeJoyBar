@@ -29,7 +29,14 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, Literal
 
-from .actions import Action, ActionParseError, MacroRef, parse_action
+from .actions import (
+    Action,
+    ActionParseError,
+    AppSwitcherAction,
+    MacroRef,
+    WindowSwitchAction,
+    parse_action,
+)
 from .events import ALL_DIRECTIONS, Side
 from .keyboard import is_known_key
 
@@ -292,14 +299,13 @@ def _validate_macro(name: str, macro: MacroDef, errors: list[str]) -> None:
         except ActionParseError as e:
             errors.append(f"macro.{name}.steps[{i}]: {e}")
             continue
-        # Macros can't invoke other macros or window_switch — keeps semantics simple.
-        from .actions import MacroRef as _MR  # local alias to avoid top-level cycle risk
-        from .actions import WindowSwitchAction
-
-        if isinstance(action, _MR):
+        # Macros can't invoke other macros or app/window switchers.
+        if isinstance(action, MacroRef):
             errors.append(f"macro.{name}.steps[{i}]: nested macro: is not allowed")
         elif isinstance(action, WindowSwitchAction):
             errors.append(f"macro.{name}.steps[{i}]: window_switch not allowed inside macros")
+        elif isinstance(action, AppSwitcherAction):
+            errors.append(f"macro.{name}.steps[{i}]: app_switcher not allowed inside macros")
         _check_action_keys(f"macro.{name}.steps[{i}]", action, errors)
 
 
@@ -317,7 +323,7 @@ def _validate_action_spec(
         errors.append(f"{label}: {e}")
         return
 
-    from .actions import AutoAction, DelayAction, TypeAction
+    from .actions import AppSwitcherAction, AutoAction, DelayAction, TypeAction
 
     if isinstance(action, DelayAction):
         errors.append(f"{label}: 'delay:' only makes sense inside a macro")
@@ -326,6 +332,8 @@ def _validate_action_spec(
         pass
     if isinstance(action, AutoAction) and allow_in_stick:
         errors.append(f"{label}: 'auto:' is for buttons; sticks should use 'tap:' or 'repeat:'")
+    if isinstance(action, AppSwitcherAction) and allow_in_stick:
+        errors.append(f"{label}: 'app_switcher:' is only supported on a button")
     if isinstance(action, MacroRef) and action.name not in macro_names:
         errors.append(f"{label}: macro {action.name!r} is not defined")
 

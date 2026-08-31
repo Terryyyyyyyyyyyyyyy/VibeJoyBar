@@ -101,8 +101,12 @@ class ControlServer:
         if self._thread is not None:
             raise RuntimeError("ControlServer already started")
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        # Remove stale socket so bind() succeeds.
+        # Never unlink a live daemon's socket: doing so lets two mappers run at
+        # once and every controller event is emitted twice. Only stale sockets
+        # may be removed.
         if self._path.exists():
+            if is_daemon_running(self._path):
+                raise IPCError(f"another vibejoy daemon is already running at {self._path}")
             try:
                 self._path.unlink()
             except OSError as e:

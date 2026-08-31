@@ -15,6 +15,7 @@
 #   delay:<ms>                 wait (only inside [macro.*].steps)
 #   macro:<name>               run a [macro.<name>] block
 #   window_switch:<a>,<b>,...  cycle focus between apps (by name or bundle id)
+#   app_switcher:system         hold Cmd+Tab; right stick cycles, left reverses
 #   shell:<command>            run /bin/sh -c <command>, non-blocking;
 #                              fires on both press and release with
 #                              $VIBEJOY_EVENT=pressed|released
@@ -30,21 +31,21 @@ stick_mode     = "4dir" # "4dir" or "8dir"
 [profile.right.buttons]
 a       = "tap:enter"
 b       = "tap:escape"
-x       = "combo:cmd+w"
-y       = "sequence:cmd+tab@400"       # Cmd+Tab app switcher (hold to cycle)
-r       = "window_switch:code,chrome,terminal"
-zr      = "macro:claude_focus"
+x       = "combo:option+0"
+y       = "combo:option+1"
+r       = "combo:option+2"           # Type4Me Prompt 优化; not app-switch mode
+zr      = "app_switcher:system"     # hold for Cmd+Tab; right stick navigates
 plus    = "combo:cmd+s"
-home    = "shell:open -a Calculator"   # 🔑 shell: runs any shell command
-"r-stick" = "tap:tab"
-sl      = "hold:shift"
-sr      = "hold:alt"
+home    = "window_switch:com.openai.codex" # ChatGPT app bundle (Codex)
+"r-stick" = "none"
+sl      = "none"
+sr      = "none"
 
 [profile.right.stick]
-up      = "repeat:up@100"
-down    = "repeat:down@100"
-left    = "repeat:left@100"
-right   = "repeat:right@100"
+up      = "macro:codex_page_up"          # one page up in the current Codex chat
+down    = "macro:codex_page_down"        # one page down in the current Codex chat
+left    = "macro:codex_previous_thread"  # previous Codex chat; ZR still overrides this
+right   = "macro:codex_next_thread"      # next Codex chat; ZR still overrides this
 
 # ─────────── Left Joy-Con (only used if paired) ───────────
 
@@ -58,15 +59,31 @@ capture = "combo:cmd+shift+3"           # macOS screenshot
 "l-stick" = "tap:tab"
 
 [profile.left.stick]
-up      = "tap:up"
-down    = "tap:down"
-left    = "tap:left"
-right   = "tap:right"
+up      = "none"
+down    = "none"
+left    = "none"
+right   = "none"
 
 # ─────────── Macros ───────────
 # Macros are ordered lists of DSL steps.  `if_app` optionally restricts
 # a macro to when a specific app is in the foreground (matched against
 # localized name or bundle id, case-insensitive substring).
+
+[macro.codex_page_up]
+if_app  = "com.openai.codex"
+steps   = ["tap:page_up"]
+
+[macro.codex_page_down]
+if_app  = "com.openai.codex"
+steps   = ["tap:page_down"]
+
+[macro.codex_previous_thread]
+if_app  = "com.openai.codex"
+steps   = ["combo:cmd+shift+["]
+
+[macro.codex_next_thread]
+if_app  = "com.openai.codex"
+steps   = ["combo:cmd+shift+]"]
 
 [macro.claude_focus]
 if_app  = "Visual Studio Code"

@@ -4,6 +4,7 @@ import pytest
 
 from vibejoy.actions import (
     ActionParseError,
+    AppSwitcherAction,
     AutoAction,
     ComboAction,
     DelayAction,
@@ -99,6 +100,15 @@ class TestWindowSwitch:
     def test_empty_list_rejected(self) -> None:
         with pytest.raises(ActionParseError):
             parse_action("window_switch:")
+
+
+class TestAppSwitcher:
+    def test_system_mode(self) -> None:
+        assert parse_action("app_switcher:system") == AppSwitcherAction(mode="system")
+
+    def test_only_system_mode_is_supported(self) -> None:
+        with pytest.raises(ActionParseError):
+            parse_action("app_switcher:other")
 
 
 class TestShell:

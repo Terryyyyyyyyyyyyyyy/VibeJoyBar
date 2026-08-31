@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from .actions import (
     Action,
     ActionParseError,
+    AppSwitcherAction,
     AutoAction,
     ComboAction,
     DelayAction,
@@ -77,6 +78,8 @@ class _MapperState:
     # stick-id -> (shell_cmd, direction) currently "held" by a stick shell binding,
     # so we can fire a "released" event when the stick returns to center.
     stick_shell_held: dict[str, tuple[str, str]] = field(default_factory=dict)
+    app_switcher_active: bool = False
+    app_switcher_button_id: str | None = None
 
 
 class Mapper:
@@ -169,6 +172,9 @@ class Mapper:
             self._window.set_queries(action.apps)
             self._window.step()
 
+        elif isinstance(action, AppSwitcherAction):
+            self._enter_app_switcher(button_id)
+
         elif isinstance(action, MacroRef):
             self._run_macro(
                 action.name,
@@ -197,6 +203,10 @@ class Mapper:
         # but being explicit keeps future refactors honest).
         if isinstance(action, ShellAction):
             self._spawn_shell(action.cmd, "released", button=event.button, side=event.side)
+            return
+
+        if isinstance(action, AppSwitcherAction):
+            self._exit_app_switcher(button_id)
             return
 
         # Sequence: release only the modifier (keys[1:] were tapped, not held).
@@ -249,6 +259,22 @@ class Mapper:
 
     def _on_stick(self, event: StickEvent) -> None:
         stick_id = _stick_id(event.side)
+
+        # While ZR is held, the right stick exclusively navigates the native
+        # Cmd+Tab switcher. Ordinary right-stick mappings must not compete
+        # with it, including on the center transition.
+        if event.side == "right" and self._state.app_switcher_active:
+            self._release_stick(stick_id, side=event.side)
+            if event.direction == "right":
+                self._keyboard.tap("tab")
+            elif event.direction == "left":
+                # Cmd is already held by ZR. Keep it down while briefly
+                # adding Shift; KeyboardOutput.combo would temporarily
+                # release Cmd, which would commit the switcher selection.
+                self._keyboard.press("shift")
+                self._keyboard.tap("tab")
+                self._keyboard.release("shift")
+            return
 
         # Always release previous stick hold/repeat/shell before considering the new direction.
         self._release_stick(stick_id, side=event.side)
@@ -320,6 +346,24 @@ class Mapper:
         if held is not None and side is not None:
             cmd, direction = held
             self._spawn_shell(cmd, "released", side=side, direction=direction)
+
+    def _enter_app_switcher(self, button_id: str) -> None:
+        if self._state.app_switcher_active:
+            return
+        # Clear any prior directional hold before taking ownership of the
+        # right stick. Cmd remains held until ZR release.
+        self._release_stick(_stick_id("right"), side="right")
+        self._keyboard.press("cmd")
+        self._keyboard.tap("tab")
+        self._state.app_switcher_active = True
+        self._state.app_switcher_button_id = button_id
+
+    def _exit_app_switcher(self, button_id: str) -> None:
+        if not self._state.app_switcher_active or self._state.app_switcher_button_id != button_id:
+            return
+        self._keyboard.release("cmd")
+        self._state.app_switcher_active = False
+        self._state.app_switcher_button_id = None
 
     def _fire_stick_repeats(self, now: float) -> None:
         for repeat in self._state.stick_repeat.values():

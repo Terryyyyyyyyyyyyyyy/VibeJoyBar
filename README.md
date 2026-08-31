@@ -87,6 +87,7 @@ Everything lives in one TOML file. The full DSL:
 | `delay` | `delay:<ms>` | wait (inside macros only) |
 | `macro` | `macro:<name>` | run a `[macro.<name>]` block |
 | `window_switch` | `window_switch:<a>,<b>,…` | cycle focus between apps |
+| `app_switcher` | `app_switcher:system` | hold Cmd+Tab; right stick advances and left reverses |
 | `shell` | `shell:<command>` | run `/bin/sh -c <command>`, non-blocking |
 
 Minimal example:
@@ -101,16 +102,33 @@ stick_mode     = "4dir"
 [profile.right.buttons]
 a    = "tap:enter"
 b    = "tap:escape"
-x    = "combo:cmd+w"
-r    = "window_switch:code,chrome,terminal"
-zr   = "macro:claude_focus"
+x    = "combo:option+0"
+y    = "combo:option+1"
+r    = "combo:option+2"
+zr   = "app_switcher:system"  # hold ZR; stick right advances, left reverses
 plus = "combo:cmd+s"
 
 [profile.right.stick]
-up    = "repeat:up@100"
-down  = "repeat:down@100"
-left  = "repeat:left@100"
-right = "repeat:right@100"
+up    = "macro:codex_page_up"          # one page up in the current Codex chat
+down  = "macro:codex_page_down"        # one page down in the current Codex chat
+left  = "macro:codex_previous_thread"  # previous chat; ZR overrides this while held
+right = "macro:codex_next_thread"      # next chat; ZR overrides this while held
+
+[macro.codex_page_up]
+if_app = "com.openai.codex"
+steps = ["tap:page_up"]
+
+[macro.codex_page_down]
+if_app = "com.openai.codex"
+steps = ["tap:page_down"]
+
+[macro.codex_previous_thread]
+if_app = "com.openai.codex"
+steps = ["combo:cmd+shift+["]
+
+[macro.codex_next_thread]
+if_app = "com.openai.codex"
+steps = ["combo:cmd+shift+]"]
 
 [macro.claude_focus]
 if_app = "Visual Studio Code"    # run only when VS Code is frontmost
