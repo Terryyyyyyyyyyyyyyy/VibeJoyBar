@@ -131,7 +131,7 @@ struct ControllerIllustrationView: View {
             ZStack {
                 Circle()
                     .fill(emphasized ? Color.accentColor.opacity(0.20) : .clear)
-                    .overlay(Circle().stroke(emphasized ? Color.accentColor : Color.primary.opacity(0.34), lineWidth: emphasized ? 2.5 : 1))
+                    .overlay(Circle().stroke(emphasized ? Color.accentColor : .clear, lineWidth: emphasized ? 2.5 : 0))
                 if emphasized {
                     Text(hotspotTitle(id))
                         .font(.system(size: id == "r-stick" ? 8 : 10, weight: .bold, design: .rounded))
