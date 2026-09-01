@@ -130,10 +130,21 @@ final class VibeJoyConfigStore {
             }
         }
 
+        // The old Codex page macros sent Page Up/Down key presses. Migrate
+        // only those exact one-step macro values; custom macro steps remain
+        // untouched, even when their names happen to contain "page_up".
+        for index in lines.indices {
+            let trimmed = lines[index].trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.hasPrefix("steps"), trimmed.contains("[\"tap:page_up\"]") || trimmed.contains("[\"tap:page_down\"]") else { continue }
+            lines[index] = lines[index]
+                .replacingOccurrences(of: "[\"tap:page_up\"]", with: "[\"scroll:up@8\"]")
+                .replacingOccurrences(of: "[\"tap:page_down\"]", with: "[\"scroll:down@8\"]")
+        }
+
         if migratedStick {
             let macroDefinitions = [
-                ("codex_page_up", "tap:page_up"),
-                ("codex_page_down", "tap:page_down"),
+                ("codex_page_up", "scroll:up@8"),
+                ("codex_page_down", "scroll:down@8"),
                 ("codex_previous_thread", "combo:cmd+shift+["),
                 ("codex_next_thread", "combo:cmd+shift+]"),
             ]

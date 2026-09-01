@@ -13,6 +13,8 @@ enum ControllerViewMode: String, CaseIterable {
 struct ControllerIllustrationView: View {
     @Binding var selection: MappingSelection?
     @State private var mode: ControllerViewMode = .front
+    @State private var hoveredHotspot: String?
+    @FocusState private var focusedHotspot: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -61,7 +63,7 @@ struct ControllerIllustrationView: View {
                 stickDirectionHotspot("right", symbol: "arrow.right", x: 0.75, y: 0.65, in: size)
                 stickDirectionHotspot("down", symbol: "arrow.down", x: 0.64, y: 0.74, in: size)
                 faceHotspot("r-stick", x: 0.64, y: 0.65, in: size)
-                faceHotspot("home", x: 0.53, y: 0.79, in: size)
+                faceHotspot("home", x: 0.53, y: 0.82, in: size)
                 faceHotspot("sl", x: 0.13, y: 0.31, in: size)
                 faceHotspot("sr", x: 0.13, y: 0.80, in: size)
             }
@@ -111,7 +113,7 @@ struct ControllerIllustrationView: View {
             }
         }
         .aspectRatio(aspect, contentMode: .fit)
-        .frame(maxWidth: mode == .front ? 360 : 610, maxHeight: mode == .front ? 560 : 340)
+        .frame(maxWidth: mode == .front ? 400 : 610, maxHeight: mode == .front ? 600 : 340)
         .padding(.horizontal, 30)
     }
 
@@ -124,25 +126,33 @@ struct ControllerIllustrationView: View {
     }
 
     private func faceHotspot(_ id: String, x: CGFloat, y: CGFloat, in size: CGSize) -> some View {
-        Button { selection = .button(id) } label: {
-            Text(hotspotTitle(id))
-                .font(.system(size: id == "r-stick" ? 8 : 10, weight: .bold, design: .rounded))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(selection == .button(id) ? Color.accentColor : Color.primary)
-                .frame(width: id == "r-stick" ? 43 : 30, height: id == "r-stick" ? 43 : 30)
-                .background(selection == .button(id) ? Color.accentColor.opacity(0.24) : Color.primary.opacity(0.10), in: Circle())
-                .overlay(Circle().stroke(selection == .button(id) ? Color.accentColor : Color.primary.opacity(0.34), lineWidth: selection == .button(id) ? 2.5 : 1))
-                .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
+        let emphasized = selection == .button(id) || hoveredHotspot == id || focusedHotspot == id
+        return Button { selection = .button(id) } label: {
+            ZStack {
+                Circle()
+                    .fill(emphasized ? Color.accentColor.opacity(0.20) : .clear)
+                    .overlay(Circle().stroke(emphasized ? Color.accentColor : Color.primary.opacity(0.34), lineWidth: emphasized ? 2.5 : 1))
+                if emphasized {
+                    Text(hotspotTitle(id))
+                        .font(.system(size: id == "r-stick" ? 8 : 10, weight: .bold, design: .rounded))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(Color.accentColor)
+                        .padding(3)
+                }
+            }
+            .frame(width: id == "r-stick" ? 45 : 32, height: id == "r-stick" ? 45 : 32)
         }
         .buttonStyle(.plain)
         .position(x: x * size.width, y: y * size.height)
+        .onHover { hoveredHotspot = $0 ? id : nil }
+        .focused($focusedHotspot, equals: id)
         .accessibilityLabel("\(hotspotTitle(id)) 控制")
         .accessibilityHint("打开映射检查器")
         .help("编辑 \(hotspotTitle(id)) 映射")
     }
 
     private var stickLegend: some View {
-        Text("R 摇杆：↑ / ↓ 当前对话翻页 · ← / → 切换对话；按住 ZR 时 ← / → 改为系统 App 切换")
+        Text("R 摇杆：↑ / ↓ 滚动当前对话约一页 · ← / → 切换对话；按住 ZR 时 ← / → 改为系统 App 切换")
             .font(.caption2)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -168,8 +178,8 @@ struct ControllerIllustrationView: View {
     private func hotspotTitle(_ id: String) -> String {
         switch id {
         case "plus": "+"
-        case "r-stick": "R\nSTICK"
-        case "home": "HOME"
+        case "r-stick": "R 摇杆"
+        case "home": "Home"
         default: id.uppercased()
         }
     }

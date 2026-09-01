@@ -127,7 +127,7 @@ final class VibeJoyConfigStoreTests: XCTestCase {
         XCTAssertEqual(store.stickBindings.first(where: { $0.direction == "right" })?.action, "macro:codex_next_thread")
         let migrated = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(migrated.contains("[macro.codex_page_up]"))
-        XCTAssertTrue(migrated.contains("steps = [\"tap:page_up\"]"))
+        XCTAssertTrue(migrated.contains("steps = [\"scroll:up@8\"]"))
         XCTAssertTrue(migrated.contains("steps = [\"combo:cmd+shift+]\"]"))
     }
 
@@ -147,5 +147,30 @@ final class VibeJoyConfigStoreTests: XCTestCase {
         let store = VibeJoyConfigStore(configURL: url)
         XCTAssertEqual(store.stickBindings.first(where: { $0.direction == "up" })?.action, "tap:home")
         XCTAssertEqual(store.stickBindings.first(where: { $0.direction == "down" })?.action, "macro:codex_page_down")
+    }
+
+    @MainActor
+    func testMigratesExistingPageMacrosWithoutChangingCustomSteps() throws {
+        let source = """
+        [profile.right.stick]
+        up = "macro:codex_page_up"
+        down = "macro:codex_page_down"
+
+        [macro.codex_page_up]
+        if_app = "com.openai.codex"
+        steps = ["tap:page_up"]
+
+        [macro.custom]
+        steps = ["tap:page_up", "tap:enter"]
+        """
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try source.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = VibeJoyConfigStore(configURL: url)
+        let migrated = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertEqual(store.action(for: .stick("up")), "macro:codex_page_up")
+        XCTAssertTrue(migrated.contains("steps = [\"scroll:up@8\"]"))
+        XCTAssertTrue(migrated.contains("steps = [\"tap:page_up\", \"tap:enter\"]"))
     }
 }

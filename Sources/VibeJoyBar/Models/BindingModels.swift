@@ -37,8 +37,8 @@ enum ActionSummary {
         let value = action.trimmingCharacters(in: .whitespacesAndNewlines)
         if value.isEmpty || value == "none" { return "已停用" }
         if value == "app_switcher:system" { return "按住 · 系统 App 切换" }
-        if value == "macro:codex_page_up" { return "Codex · 对话向上翻页" }
-        if value == "macro:codex_page_down" { return "Codex · 对话向下翻页" }
+        if value == "macro:codex_page_up" { return "Codex · 当前对话向上滚动" }
+        if value == "macro:codex_page_down" { return "Codex · 当前对话向下滚动" }
         if value == "macro:codex_previous_thread" { return "Codex · 上一对话" }
         if value == "macro:codex_next_thread" { return "Codex · 下一对话" }
         if value.hasPrefix("tap:") { return "按一下 · \(keyName(String(value.dropFirst(4))))" }

@@ -94,8 +94,8 @@ struct MappingInspector: View {
         case .button("r-stick"): "摇杆按下"
         case .button("sl"), .button("sr"): "侧边肩键"
         case .button: "自定义按键动作"
-        case .stick("up"): "Codex 当前对话 · 向上翻一页"
-        case .stick("down"): "Codex 当前对话 · 向下翻一页"
+        case .stick("up"): "Codex 当前对话 · 原生向上滚动约一页"
+        case .stick("down"): "Codex 当前对话 · 原生向下滚动约一页"
         case .stick("left"): "Codex · 切换到上一对话"
         case .stick("right"): "Codex · 切换到下一对话"
         case .stick: "摇杆方向动作"
@@ -115,7 +115,7 @@ struct JoystickEditorView: View {
                 Spacer()
                 Text("仅 Codex 前台生效").font(.caption).foregroundStyle(.secondary)
             }
-            Text("上 / 下每次翻动当前对话一页；左 / 右切换上一或下一对话。按住 ZR 时，左右方向仍优先用于系统 App 切换。所有 Codex 导航都只在 Codex 位于前台时生效。")
+            Text("上 / 下每次滚动当前对话约一页；左 / 右切换上一或下一对话。按住 ZR 时，左右方向仍优先用于系统 App 切换。所有 Codex 导航都只在 Codex 位于前台时生效。")
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Text("全局死区")
