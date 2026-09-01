@@ -16,14 +16,14 @@ try:  # macOS; keep imports optional so config tests run elsewhere.
     from Quartz import (
         CGEventCreateScrollWheelEvent,
         CGEventPost,
-        kCGEventFlagMaskNonCoalesced,
+        CGEventPostToPid,
         kCGHIDEventTap,
         kCGScrollEventUnitLine,
     )
 except ImportError:  # pragma: no cover - CI/non-macOS fallback
     CGEventCreateScrollWheelEvent = None
     CGEventPost = None
-    kCGEventFlagMaskNonCoalesced = 0
+    CGEventPostToPid = None
     kCGHIDEventTap = 0
     kCGScrollEventUnitLine = 0
 
@@ -34,6 +34,8 @@ def emit_scroll(
     *,
     _create_event: Callable[..., object] | None = None,
     _post_event: Callable[..., object] | None = None,
+    _post_to_pid: Callable[[int, object], object] | None = None,
+    _frontmost_pid: Callable[[], int | None] | None = None,
 ) -> bool:
     """Post one vertical scroll event, returning whether it was emitted.
 
@@ -44,7 +46,8 @@ def emit_scroll(
         raise ValueError("scroll direction must be up/down and amount positive")
     create = _create_event or CGEventCreateScrollWheelEvent
     post = _post_event or CGEventPost
-    if create is None or post is None:
+    post_to_pid = _post_to_pid or CGEventPostToPid
+    if create is None or (post is None and post_to_pid is None):
         logger.warning("native scroll is unavailable on this platform")
         return False
 
@@ -55,11 +58,26 @@ def emit_scroll(
         1,
         delta,
     )
-    # Prevent macOS from coalescing this discrete gesture with an unrelated
-    # trackpad event. The event still targets the current frontmost app.
-    try:
-        event.setIntegerValueField_(kCGEventFlagMaskNonCoalesced, 1)
-    except AttributeError:
-        pass
-    post(kCGHIDEventTap, event)
+    pid = (_frontmost_pid or _frontmost_process_id)()
+    if pid and pid > 0 and post_to_pid is not None:
+        post_to_pid(pid, event)
+    elif post is not None:
+        # Last-resort compatibility path for unusual macOS versions or when
+        # the frontmost app disappears between the guard check and posting.
+        post(kCGHIDEventTap, event)
+    else:
+        logger.warning("cannot target native scroll: no foreground app PID")
+        return False
     return True
+
+
+def _frontmost_process_id() -> int | None:
+    """Return the current foreground app PID, or None off macOS."""
+    try:
+        from AppKit import NSWorkspace  # type: ignore[import-not-found]
+
+        app = NSWorkspace.sharedWorkspace().frontmostApplication()
+        pid = int(app.processIdentifier()) if app is not None else 0
+        return pid if pid > 0 else None
+    except (ImportError, AttributeError, TypeError, ValueError):
+        return None
