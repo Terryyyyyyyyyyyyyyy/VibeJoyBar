@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2
+
+- Preserve Command and Shift flags on Cmd+Tab app-switcher navigation.
+
 ## 0.5.1
 
 - Use bounded native macOS scroll gestures for Codex conversation history;

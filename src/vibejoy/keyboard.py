@@ -200,6 +200,72 @@ class KeyboardOutput:
             self._held.add(resolved)
         logger.debug("tap %s", key)
 
+    def tap_with_modifiers(
+        self,
+        key: str,
+        modifiers: Sequence[str],
+        duration: float = 0.02,
+    ) -> bool:
+        """Tap ``key`` with modifier flags without disturbing held keys.
+
+        macOS shortcut consumers inspect modifier flags on the key event
+        itself. This path is used by Cmd+Tab while Cmd is already held, so
+        ``combo`` (which temporarily releases held modifiers) is unsuitable.
+        Returns ``True`` when native Quartz events were emitted.
+        """
+        resolved_modifiers = tuple(resolve_key(modifier) for modifier in modifiers)
+        flags = 0
+        for modifier in resolved_modifiers:
+            if isinstance(modifier, Key):
+                flags |= _MODIFIER_FLAGS.get(modifier, 0)
+        return self.tap_with_flags(
+            key,
+            flags,
+            duration=duration,
+            fallback_modifiers=resolved_modifiers,
+        )
+
+    def tap_with_flags(
+        self,
+        key: str,
+        flags: int,
+        duration: float = 0.02,
+        *,
+        fallback_modifiers: Sequence[_ResolvedKey] = (),
+    ) -> bool:
+        """Tap a key with explicit Quartz flags, preserving ``_held``.
+
+        The fallback presses only modifiers that were not already held and
+        restores the exact prior bookkeeping, which keeps this safe off macOS
+        and with injected keyboard controllers.
+        """
+        resolved = resolve_key(key)
+        keycode = self._virtual_keycode(resolved)
+        if CGEventCreateKeyboardEvent is not None and keycode is not None:
+            _post_macos_key_event(keycode, True, flags)
+            time.sleep(duration)
+            _post_macos_key_event(keycode, False, flags)
+            return True
+
+        newly_held: list[_ResolvedKey] = []
+        for modifier in fallback_modifiers:
+            if modifier not in self._held:
+                self._kbd.press(modifier)
+                self._held.add(modifier)
+                newly_held.append(modifier)
+        was_held = resolved in self._held
+        if not was_held:
+            self._kbd.press(resolved)
+            self._held.add(resolved)
+        time.sleep(duration)
+        if not was_held:
+            self._kbd.release(resolved)
+            self._held.discard(resolved)
+        for modifier in reversed(newly_held):
+            self._kbd.release(modifier)
+            self._held.discard(modifier)
+        return False
+
     # -- higher-level --
 
     def combo(self, keys: Sequence[str], hold: float = 0.04) -> None:

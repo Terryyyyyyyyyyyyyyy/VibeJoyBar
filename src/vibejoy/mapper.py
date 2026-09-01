@@ -268,14 +268,12 @@ class Mapper:
         if event.side == "right" and self._state.app_switcher_active:
             self._release_stick(stick_id, side=event.side)
             if event.direction == "right":
-                self._keyboard.tap("tab")
+                self._keyboard.tap_with_modifiers("tab", ("cmd",))
             elif event.direction == "left":
-                # Cmd is already held by ZR. Keep it down while briefly
-                # adding Shift; KeyboardOutput.combo would temporarily
-                # release Cmd, which would commit the switcher selection.
-                self._keyboard.press("shift")
-                self._keyboard.tap("tab")
-                self._keyboard.release("shift")
+                # Cmd is already held by ZR. Include both flags on Tab;
+                # KeyboardOutput.combo would temporarily release Cmd and
+                # commit the switcher selection.
+                self._keyboard.tap_with_modifiers("tab", ("cmd", "shift"))
             return
 
         # Always release previous stick hold/repeat/shell before considering the new direction.
@@ -356,7 +354,7 @@ class Mapper:
         # right stick. Cmd remains held until ZR release.
         self._release_stick(_stick_id("right"), side="right")
         self._keyboard.press("cmd")
-        self._keyboard.tap("tab")
+        self._keyboard.tap_with_modifiers("tab", ("cmd",))
         self._state.app_switcher_active = True
         self._state.app_switcher_button_id = button_id
 

@@ -87,3 +87,63 @@ def test_option_zero_uses_native_keycode_and_modifier_flags(monkeypatch) -> None
         (0x1D, False, alt_flag),
         (0x3A, False, 0),
     ]
+
+
+def test_flagged_tab_preserves_held_cmd_and_sets_command_flag(monkeypatch) -> None:
+    import vibejoy.keyboard as keyboard_mod
+
+    posted: list[tuple[int, bool, int]] = []
+    monkeypatch.setattr(keyboard_mod, "CGEventCreateKeyboardEvent", object())
+    monkeypatch.setattr(
+        keyboard_mod,
+        "_post_macos_key_event",
+        lambda keycode, pressed, flags: posted.append((keycode, pressed, flags)) or True,
+    )
+
+    output = KeyboardOutput(controller=_FakeController())
+    output.press("cmd")
+    assert output.tap_with_modifiers("tab", ("cmd",), duration=0)
+
+    command = keyboard_mod._MODIFIER_FLAGS[keyboard_mod.Key.cmd]
+    assert posted == [(0x30, True, command), (0x30, False, command)]
+    assert keyboard_mod.Key.cmd in output.held
+
+
+def test_flagged_tab_sets_command_and_shift_flags(monkeypatch) -> None:
+    import vibejoy.keyboard as keyboard_mod
+
+    posted: list[tuple[int, bool, int]] = []
+    monkeypatch.setattr(keyboard_mod, "CGEventCreateKeyboardEvent", object())
+    monkeypatch.setattr(
+        keyboard_mod,
+        "_post_macos_key_event",
+        lambda keycode, pressed, flags: posted.append((keycode, pressed, flags)) or True,
+    )
+
+    output = KeyboardOutput(controller=_FakeController())
+    output.press("cmd")
+    assert output.tap_with_modifiers("tab", ("cmd", "shift"), duration=0)
+
+    expected = keyboard_mod._MODIFIER_FLAGS[keyboard_mod.Key.cmd] | keyboard_mod._MODIFIER_FLAGS[keyboard_mod.Key.shift]
+    assert posted == [(0x30, True, expected), (0x30, False, expected)]
+    assert keyboard_mod.Key.cmd in output.held
+    assert keyboard_mod.Key.shift not in output.held
+
+
+def test_flagged_tap_fallback_preserves_cmd_and_transient_shift(monkeypatch) -> None:
+    import vibejoy.keyboard as keyboard_mod
+
+    monkeypatch.setattr(keyboard_mod, "CGEventCreateKeyboardEvent", None)
+    controller = _FakeController()
+    output = KeyboardOutput(controller=controller)
+    output.press("cmd")
+
+    assert not output.tap_with_modifiers("tab", ("cmd", "shift"), duration=0)
+    assert controller.events == [
+        ("press", keyboard_mod.Key.cmd),
+        ("press", keyboard_mod.Key.shift),
+        ("press", keyboard_mod.Key.tab),
+        ("release", keyboard_mod.Key.tab),
+        ("release", keyboard_mod.Key.shift),
+    ]
+    assert output.held == frozenset({keyboard_mod.Key.cmd})

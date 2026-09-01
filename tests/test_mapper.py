@@ -28,6 +28,10 @@ class FakeKeyboard:
     def tap(self, key: str, duration: float = 0.02) -> None:
         self.events.append(("tap", key))
 
+    def tap_with_modifiers(self, key: str, modifiers: tuple[str, ...], duration: float = 0.02) -> bool:
+        self.events.append(("modified_tap", (key, tuple(modifiers))))
+        return True
+
     def combo(self, keys, hold: float = 0.04) -> None:
         self.events.append(("combo", tuple(keys)))
 
@@ -191,14 +195,22 @@ class TestAppSwitcher:
         mapper = Mapper(_config({"zr": "app_switcher:system"}, right_stick={"right": "tap:right"}), kbd, win)
         mapper.on_event(ButtonEvent(side="right", button="zr", pressed=True))
         mapper.on_event(ButtonEvent(side="right", button="zr", pressed=False))
-        assert kbd.events == [("press", "cmd"), ("tap", "tab"), ("release", "cmd")]
+        assert kbd.events == [
+            ("press", "cmd"),
+            ("modified_tap", ("tab", ("cmd",))),
+            ("release", "cmd"),
+        ]
 
     def test_right_stick_navigates_forward_while_held(self, kbd: FakeKeyboard, win: FakeWindow) -> None:
         mapper = Mapper(_config({"zr": "app_switcher:system"}, right_stick={"right": "tap:right", "left": "tap:left"}), kbd, win)
         mapper.on_event(ButtonEvent(side="right", button="zr", pressed=True))
         mapper.on_event(StickEvent(side="right", direction="right"))
         mapper.on_event(StickEvent(side="right", direction=None))
-        assert kbd.events == [("press", "cmd"), ("tap", "tab"), ("tap", "tab")]
+        assert kbd.events == [
+            ("press", "cmd"),
+            ("modified_tap", ("tab", ("cmd",))),
+            ("modified_tap", ("tab", ("cmd",))),
+        ]
 
     def test_left_stick_navigates_backward_and_center_is_noop(self, kbd: FakeKeyboard, win: FakeWindow) -> None:
         mapper = Mapper(_config({"zr": "app_switcher:system"}, right_stick={"left": "tap:left"}), kbd, win)
@@ -208,10 +220,8 @@ class TestAppSwitcher:
         mapper.on_event(ButtonEvent(side="right", button="zr", pressed=False))
         assert kbd.events == [
             ("press", "cmd"),
-            ("tap", "tab"),
-            ("press", "shift"),
-            ("tap", "tab"),
-            ("release", "shift"),
+            ("modified_tap", ("tab", ("cmd",))),
+            ("modified_tap", ("tab", ("cmd", "shift"))),
             ("release", "cmd"),
         ]
 
