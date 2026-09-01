@@ -85,6 +85,7 @@ Everything lives in one TOML file. The full DSL:
 | `sequence` | `sequence:<mod>+<k>[@<ms>]` | hold mod, tap rest (optionally repeat) |
 | `type` | `type:<text>` | type a literal string |
 | `delay` | `delay:<ms>` | wait (inside macros only) |
+| `scroll` | `scroll:<up\|down>[@<amount>]` | one native vertical scroll gesture (inside macros only) |
 | `macro` | `macro:<name>` | run a `[macro.<name>]` block |
 | `window_switch` | `window_switch:<a>,<b>,…` | cycle focus between apps |
 | `app_switcher` | `app_switcher:system` | hold Cmd+Tab; right stick advances and left reverses |
@@ -116,11 +117,11 @@ right = "macro:codex_next_thread"      # next chat; ZR overrides this while held
 
 [macro.codex_page_up]
 if_app = "com.openai.codex"
-steps = ["tap:page_up"]
+steps = ["scroll:up@8"]
 
 [macro.codex_page_down]
 if_app = "com.openai.codex"
-steps = ["tap:page_down"]
+steps = ["scroll:down@8"]
 
 [macro.codex_previous_thread]
 if_app = "com.openai.codex"

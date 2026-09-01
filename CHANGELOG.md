@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1
+
+- Use bounded native macOS scroll gestures for Codex conversation history;
+  left/right chat switching and ZR App switching are unchanged.
+
 All notable changes to this project are documented in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),

@@ -35,6 +35,19 @@ def test_example_config_has_expected_macro(example_config_file: Path) -> None:
     assert any(step.startswith("type:") for step in macro.steps)
 
 
+def test_example_codex_scroll_macros_are_native_gestures(example_config_file: Path) -> None:
+    config = load_config(example_config_file)
+    assert config.macros["codex_page_up"].steps == ("scroll:up@8",)
+    assert config.macros["codex_page_down"].steps == ("scroll:down@8",)
+
+
+def test_scroll_is_only_valid_inside_macros(tmp_path: Path) -> None:
+    path = tmp_path / "bad.toml"
+    path.write_text('[profile.right.stick]\nup = "scroll:up@8"\n', encoding="utf-8")
+    with pytest.raises(ConfigError, match="only makes sense inside a macro"):
+        load_config(path)
+
+
 def test_missing_file(tmp_path: Path) -> None:
     with pytest.raises(ConfigError, match="config file not found"):
         load_config(tmp_path / "nope.toml")

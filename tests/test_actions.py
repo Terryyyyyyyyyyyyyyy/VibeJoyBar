@@ -12,6 +12,7 @@ from vibejoy.actions import (
     MacroRef,
     NoAction,
     RepeatAction,
+    ScrollAction,
     SequenceAction,
     ShellAction,
     TapAction,
@@ -55,6 +56,18 @@ class TestAtModifier:
 
     def test_auto_custom_threshold(self) -> None:
         assert parse_action("auto:f2@500") == AutoAction(key="f2", long_press_ms=500)
+
+    def test_scroll_defaults_to_one_bounded_gesture(self) -> None:
+        assert parse_action("scroll:up") == ScrollAction(direction="up", amount=8)
+
+    def test_scroll_custom_amount_and_direction(self) -> None:
+        assert parse_action("scroll:DOWN@12") == ScrollAction(direction="down", amount=12)
+
+    def test_scroll_rejects_invalid_amount_or_direction(self) -> None:
+        with pytest.raises(ActionParseError):
+            parse_action("scroll:left@8")
+        with pytest.raises(ActionParseError):
+            parse_action("scroll:up@0")
 
 
 class TestCombo:

@@ -323,10 +323,12 @@ def _validate_action_spec(
         errors.append(f"{label}: {e}")
         return
 
-    from .actions import AppSwitcherAction, AutoAction, DelayAction, TypeAction
+    from .actions import AppSwitcherAction, AutoAction, DelayAction, ScrollAction, TypeAction
 
     if isinstance(action, DelayAction):
         errors.append(f"{label}: 'delay:' only makes sense inside a macro")
+    if isinstance(action, ScrollAction):
+        errors.append(f"{label}: 'scroll:' only makes sense inside a macro")
     if isinstance(action, TypeAction) and not allow_in_stick:
         # 'type' is allowed anywhere but it's generally a macro building-block.
         pass

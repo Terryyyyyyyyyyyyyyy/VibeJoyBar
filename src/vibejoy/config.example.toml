@@ -13,6 +13,7 @@
 #   sequence:<mod>+<k>[@<ms>]  hold mod, tap rest; optional repeat interval
 #   type:<text>                type a literal string
 #   delay:<ms>                 wait (only inside [macro.*].steps)
+#   scroll:<up|down>[@<amount>] native vertical scroll (macro only; one gesture)
 #   macro:<name>               run a [macro.<name>] block
 #   window_switch:<a>,<b>,...  cycle focus between apps (by name or bundle id)
 #   app_switcher:system         hold Cmd+Tab; right stick cycles, left reverses
@@ -71,11 +72,11 @@ right   = "none"
 
 [macro.codex_page_up]
 if_app  = "com.openai.codex"
-steps   = ["tap:page_up"]
+steps   = ["scroll:up@8"]
 
 [macro.codex_page_down]
 if_app  = "com.openai.codex"
-steps   = ["tap:page_down"]
+steps   = ["scroll:down@8"]
 
 [macro.codex_previous_thread]
 if_app  = "com.openai.codex"

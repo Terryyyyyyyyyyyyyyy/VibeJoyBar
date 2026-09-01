@@ -161,6 +161,23 @@ class TestStickRepeat:
         assert len(kbd.events) == before  # no more taps
 
 
+class TestNativeScroll:
+    def test_scroll_macro_fires_once_per_direction_entry(self, kbd: FakeKeyboard, win: FakeWindow, monkeypatch) -> None:
+        calls: list[tuple[str, int]] = []
+        import vibejoy.mapper as mapper_mod
+
+        monkeypatch.setattr(mapper_mod, "emit_scroll", lambda direction, amount: calls.append((direction, amount)))
+        cfg = _config(
+            right_stick={"up": "macro:codex_page_up"},
+            macros={"codex_page_up": MacroDef(steps=("scroll:up@8",))},
+        )
+        mapper = Mapper(cfg, kbd, win)
+        mapper.on_event(StickEvent(side="right", direction="up"))
+        mapper.on_event(StickEvent(side="right", direction=None))
+        assert calls == [("up", 8)]
+        assert kbd.events == []
+
+
 class TestWindowSwitch:
     def test_step_called(self, kbd: FakeKeyboard, win: FakeWindow) -> None:
         mapper = Mapper(_config({"r": "window_switch:code,chrome"}), kbd, win)

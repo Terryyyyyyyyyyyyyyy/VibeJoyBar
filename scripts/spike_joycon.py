@@ -22,7 +22,6 @@ from __future__ import annotations
 import sys
 import time
 
-
 # ---------- 漂亮的输出 ----------
 
 GREEN = "\033[92m"
@@ -291,7 +290,7 @@ def main() -> int:
 
     section("结果")
     print(f"  如果上面 4 步全部 {GREEN}✅{RESET}，说明技术栈在你这台 Mac 上可行，")
-    print(f"  可以开始写 VibeJoy 正式代码了。")
+    print("  可以开始写 VibeJoy 正式代码了。")
     print()
     return 0
 

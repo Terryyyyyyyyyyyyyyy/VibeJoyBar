@@ -28,6 +28,7 @@ from .actions import (
     MacroRef,
     NoAction,
     RepeatAction,
+    ScrollAction,
     SequenceAction,
     ShellAction,
     TapAction,
@@ -38,6 +39,7 @@ from .actions import (
 from .config import Config, MacroDef, ProfileConfig
 from .events import ButtonEvent, Direction, Event, Side, StickEvent
 from .keyboard import KeyboardOutput
+from .scroll import emit_scroll
 from .shell import ShellEventKind, build_context_env, get_frontmost_app, run_shell
 from .window import WindowSwitcher
 
@@ -404,6 +406,8 @@ class Mapper:
             self._keyboard.type_text(step.text)
         elif isinstance(step, DelayAction):
             time.sleep(step.ms / 1000.0)
+        elif isinstance(step, ScrollAction):
+            emit_scroll(step.direction, step.amount)
         elif isinstance(step, RepeatAction):
             self._keyboard.tap(step.key)
         elif isinstance(step, ShellAction):

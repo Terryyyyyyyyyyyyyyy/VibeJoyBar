@@ -16,6 +16,7 @@ Grammar
     type:<text>                # type literal text (macro use)
     delay:<ms>                 # wait N ms (macro use only)
     macro:<name>               # invoke a [macro.<name>] from config
+    scroll:<up|down>[@<amount>] # native vertical scroll (macro use only)
     window_switch:<app1>,<app2>,...  # cycle focus between apps
     app_switcher:system           # hold Cmd+Tab; stick left/right moves selection
     shell:<command>            # run shell command, non-blocking, fires on both press and release
@@ -88,6 +89,14 @@ class DelayAction:
 
 
 @dataclass(frozen=True, slots=True)
+class ScrollAction:
+    """Emit one bounded native vertical scroll gesture."""
+
+    direction: str
+    amount: int = 8
+
+
+@dataclass(frozen=True, slots=True)
 class MacroRef:
     name: str
 
@@ -121,6 +130,7 @@ Action: TypeAlias = (
     | SequenceAction
     | TypeAction
     | DelayAction
+    | ScrollAction
     | MacroRef
     | WindowSwitchAction
     | AppSwitcherAction
@@ -223,6 +233,17 @@ def _parse_delay(payload: str, _raw: str) -> Action:
     return DelayAction(ms=ms)
 
 
+def _parse_scroll(payload: str, raw: str) -> Action:
+    direction, amount = _split_at(payload)
+    direction = direction.strip().lower()
+    if direction not in ("up", "down"):
+        raise ActionParseError(f"scroll direction must be 'up' or 'down', got {raw!r}")
+    value = amount if amount is not None else 8
+    if value <= 0:
+        raise ActionParseError(f"scroll amount must be positive, got {value}")
+    return ScrollAction(direction=direction, amount=value)
+
+
 def _parse_macro(payload: str, _raw: str) -> Action:
     name = payload.strip()
     if not name:
@@ -262,6 +283,7 @@ _PARSERS: dict[str, callable] = {
     "sequence": _parse_sequence,
     "type": _parse_type,
     "delay": _parse_delay,
+    "scroll": _parse_scroll,
     "macro": _parse_macro,
     "window_switch": _parse_window_switch,
     "app_switcher": _parse_app_switcher,
