@@ -17,7 +17,6 @@ try:  # macOS; keep imports optional so config tests run elsewhere.
         CGEventCreateScrollWheelEvent,
         CGEventPost,
         kCGEventFlagMaskNonCoalesced,
-        kCGEventSourceStateHIDSystemState,
         kCGHIDEventTap,
         kCGScrollEventUnitLine,
     )
@@ -25,7 +24,6 @@ except ImportError:  # pragma: no cover - CI/non-macOS fallback
     CGEventCreateScrollWheelEvent = None
     CGEventPost = None
     kCGEventFlagMaskNonCoalesced = 0
-    kCGEventSourceStateHIDSystemState = 0
     kCGHIDEventTap = 0
     kCGScrollEventUnitLine = 0
 
@@ -53,7 +51,6 @@ def emit_scroll(
     delta = amount if direction == "up" else -amount
     event = create(
         None,
-        kCGEventSourceStateHIDSystemState,
         kCGScrollEventUnitLine,
         1,
         delta,
