@@ -117,27 +117,32 @@ struct ControllerIllustrationView: View {
     @ViewBuilder private var assetCanvas: some View {
         if mode == .front {
             controllerAsset(mode.assetName, aspect: 0.40) { size in
-                // Stick subtle compass backdrop disk for unified visual anchoring
-                stickCompassBackdrop(x: 0.64, y: 0.65, in: size)
+                // Stick compass backdrop centered directly on analog stick
+                stickCompassBackdrop(x: 0.677, y: 0.540, in: size)
 
-                faceHotspot("plus", x: 0.43, y: 0.20, in: size)
-                faceHotspot("x", x: 0.67, y: 0.29, in: size)
-                faceHotspot("y", x: 0.45, y: 0.38, in: size)
-                faceHotspot("a", x: 0.76, y: 0.38, in: size)
-                faceHotspot("b", x: 0.59, y: 0.47, in: size)
-                faceHotspot("r-stick", x: 0.64, y: 0.65, in: size)
-                stickDirectionHotspot("up", symbol: "arrow.up", x: 0.64, y: 0.56, in: size)
-                stickDirectionHotspot("left", symbol: "arrow.left", x: 0.53, y: 0.65, in: size)
-                stickDirectionHotspot("right", symbol: "arrow.right", x: 0.75, y: 0.65, in: size)
-                stickDirectionHotspot("down", symbol: "arrow.down", x: 0.64, y: 0.74, in: size)
-                faceHotspot("home", x: 0.53, y: 0.82, in: size)
-                faceHotspot("sl", x: 0.13, y: 0.31, in: size)
-                faceHotspot("sr", x: 0.13, y: 0.80, in: size)
+                // Face buttons matched to exact asset pixel centers
+                faceHotspot("plus", x: 0.442, y: 0.132, in: size)
+                faceHotspot("x", x: 0.651, y: 0.211, in: size)
+                faceHotspot("y", x: 0.494, y: 0.283, in: size)
+                faceHotspot("a", x: 0.807, y: 0.283, in: size)
+                faceHotspot("b", x: 0.651, y: 0.354, in: size)
+
+                // Stick center and 4 direction arrow dials
+                faceHotspot("r-stick", x: 0.677, y: 0.540, in: size)
+                stickDirectionHotspot("up", symbol: "arrow.up", x: 0.677, y: 0.468, in: size)
+                stickDirectionHotspot("left", symbol: "arrow.left", x: 0.535, y: 0.540, in: size)
+                stickDirectionHotspot("right", symbol: "arrow.right", x: 0.819, y: 0.540, in: size)
+                stickDirectionHotspot("down", symbol: "arrow.down", x: 0.677, y: 0.612, in: size)
+
+                // Home and rail buttons
+                faceHotspot("home", x: 0.529, y: 0.713, in: size)
+                faceHotspot("sl", x: 0.158, y: 0.290, in: size)
+                faceHotspot("sr", x: 0.160, y: 0.660, in: size)
             }
         } else {
             controllerAsset(mode.assetName, aspect: 1.26) { size in
-                faceHotspot("zr", x: 0.56, y: 0.20, in: size)
-                faceHotspot("r", x: 0.59, y: 0.52, in: size)
+                faceHotspot("zr", x: 0.652, y: 0.216, in: size)
+                faceHotspot("r", x: 0.663, y: 0.538, in: size)
             }
         }
     }
@@ -152,15 +157,15 @@ struct ControllerIllustrationView: View {
 
         return ZStack {
             Circle()
-                .fill(.ultraThinMaterial.opacity(isStickActive ? 0.8 : 0.4))
-                .frame(width: 82, height: 82)
+                .fill(.ultraThinMaterial.opacity(isStickActive ? 0.7 : 0.0))
+                .frame(width: 76, height: 76)
                 .overlay(
                     Circle()
                         .stroke(
                             LinearGradient(
                                 colors: isStickActive
-                                    ? [Color.accentColor.opacity(0.35), Color.accentColor.opacity(0.12)]
-                                    : [Color.primary.opacity(0.12), Color.primary.opacity(0.04)],
+                                    ? [Color.accentColor.opacity(0.4), Color.accentColor.opacity(0.12)]
+                                    : [.clear, .clear],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ),
@@ -178,22 +183,29 @@ struct ControllerIllustrationView: View {
         aspect: CGFloat,
         @ViewBuilder hotspots: @escaping (CGSize) -> Hotspots
     ) -> some View {
-        ZStack {
+        let imageRatio = mode == .front ? (539.0 / 1349.0) : (1115.0 / 886.0)
+
+        return ZStack {
             RoundedRectangle(cornerRadius: 18)
-                .fill(.quaternary.opacity(0.30))
+                .fill(.quaternary.opacity(0.25))
                 .overlay(RoundedRectangle(cornerRadius: 18).stroke(.quaternary, lineWidth: 1))
+
             if let url = controllerAssetBundle.url(forResource: name, withExtension: nil),
                let image = NSImage(contentsOf: url) {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .padding(20)
+                Color.clear
+                    .aspectRatio(imageRatio, contentMode: .fit)
+                    .overlay {
+                        Image(nsImage: image)
+                            .resizable()
+                            .scaledToFit()
+                    }
                     .overlay {
                         GeometryReader { proxy in
                             ZStack { hotspots(proxy.size) }
                                 .frame(width: proxy.size.width, height: proxy.size.height)
                         }
                     }
+                    .padding(20)
             } else {
                 VStack(spacing: 8) {
                     Image(systemName: "photo.badge.exclamationmark")
@@ -205,18 +217,10 @@ struct ControllerIllustrationView: View {
                         .foregroundStyle(.secondary)
                 }
                 .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay {
-                    GeometryReader { proxy in
-                        ZStack { hotspots(proxy.size) }
-                            .frame(width: proxy.size.width, height: proxy.size.height)
-                    }
-                }
             }
         }
-        .aspectRatio(aspect, contentMode: .fit)
-        .frame(maxWidth: mode == .front ? 400 : 610, maxHeight: mode == .front ? 600 : 340)
-        .padding(.horizontal, 30)
+        .frame(maxWidth: mode == .front ? 380 : 580, maxHeight: mode == .front ? 560 : 360)
+        .padding(.horizontal, 24)
     }
 
     private var controllerAssetBundle: Bundle {
@@ -250,150 +254,101 @@ struct ControllerIllustrationView: View {
 
     @ViewBuilder
     private func hotspotShape(for id: String, emphasized: Bool) -> some View {
-        switch id {
-        case "a", "b", "x", "y":
-            Circle()
-                .fill(emphasized ? Color.accentColor.opacity(0.22) : Color.accentColor.opacity(0.04))
-                .overlay(
+        Group {
+            switch id {
+            case "a", "b", "x", "y":
+                Circle()
+                    .fill(Color.accentColor.opacity(0.25))
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.accentColor, Color.accentColor.opacity(0.65)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 2
+                            )
+                    )
+                    .shadow(color: Color.accentColor.opacity(0.55), radius: 6)
+                    .frame(width: 34, height: 34)
+
+            case "sl", "sr":
+                Capsule()
+                    .fill(Color.accentColor.opacity(0.28))
+                    .overlay(
+                        Capsule()
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.accentColor, Color.accentColor.opacity(0.7)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                ),
+                                lineWidth: 2
+                            )
+                    )
+                    .shadow(color: Color.accentColor.opacity(0.5), radius: 5)
+                    .frame(width: 16, height: 38)
+
+            case "plus":
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.accentColor.opacity(0.26))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.accentColor, lineWidth: 2)
+                    )
+                    .shadow(color: Color.accentColor.opacity(0.5), radius: 5)
+                    .frame(width: 24, height: 24)
+
+            case "home":
+                ZStack {
+                    Circle()
+                        .stroke(Color.accentColor.opacity(0.45), lineWidth: 1.5)
+                        .frame(width: 38, height: 38)
+
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.24))
+                        .overlay(Circle().stroke(Color.accentColor, lineWidth: 2))
+                        .frame(width: 28, height: 28)
+                }
+                .shadow(color: Color.accentColor.opacity(0.5), radius: 6)
+
+            case "r-stick":
+                ZStack {
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.20))
+                        .overlay(Circle().stroke(Color.accentColor, lineWidth: 2))
+                        .frame(width: 52, height: 52)
+
                     Circle()
                         .stroke(
-                            LinearGradient(
-                                colors: emphasized
-                                    ? [Color.accentColor, Color.accentColor.opacity(0.6)]
-                                    : [Color.primary.opacity(0.22), Color.primary.opacity(0.08)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1.5
+                            Color.accentColor.opacity(0.65),
+                            style: StrokeStyle(lineWidth: 1, dash: [3, 2])
                         )
-                )
-                .shadow(color: emphasized ? Color.accentColor.opacity(0.45) : .clear, radius: 5)
-                .frame(width: 32, height: 32)
+                        .frame(width: 30, height: 30)
 
-        case "sl", "sr":
-            Capsule()
-                .fill(emphasized ? Color.accentColor.opacity(0.25) : Color.primary.opacity(0.06))
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            LinearGradient(
-                                colors: emphasized
-                                    ? [Color.accentColor, Color.accentColor.opacity(0.7)]
-                                    : [Color.primary.opacity(0.2), Color.primary.opacity(0.08)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 1.5
-                        )
-                )
-                .shadow(color: emphasized ? Color.accentColor.opacity(0.45) : .clear, radius: 4)
-                .frame(width: 14, height: 36)
+                    Circle()
+                        .fill(Color.accentColor)
+                        .frame(width: 6, height: 6)
+                }
+                .shadow(color: Color.accentColor.opacity(0.5), radius: 6)
 
-        case "plus":
-            RoundedRectangle(cornerRadius: 6)
-                .fill(emphasized ? Color.accentColor.opacity(0.24) : Color.primary.opacity(0.06))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(
-                            LinearGradient(
-                                colors: emphasized
-                                    ? [Color.accentColor, Color.accentColor.opacity(0.6)]
-                                    : [Color.primary.opacity(0.22), Color.primary.opacity(0.08)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1.5
-                        )
-                )
-                .shadow(color: emphasized ? Color.accentColor.opacity(0.45) : .clear, radius: 4)
-                .frame(width: 24, height: 24)
+            case "r", "zr":
+                Capsule()
+                    .fill(Color.accentColor.opacity(0.25))
+                    .overlay(Capsule().stroke(Color.accentColor, lineWidth: 2))
+                    .shadow(color: Color.accentColor.opacity(0.5), radius: 6)
+                    .frame(width: 76, height: 34)
 
-        case "home":
-            ZStack {
+            default:
                 Circle()
-                    .stroke(
-                        emphasized ? Color.accentColor.opacity(0.45) : Color.primary.opacity(0.12),
-                        lineWidth: 1
-                    )
-                    .frame(width: 36, height: 36)
-
-                Circle()
-                    .fill(emphasized ? Color.accentColor.opacity(0.22) : Color.primary.opacity(0.05))
-                    .overlay(
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: emphasized
-                                        ? [Color.accentColor, Color.accentColor.opacity(0.7)]
-                                        : [Color.primary.opacity(0.22), Color.primary.opacity(0.08)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1.5
-                            )
-                    )
-                    .frame(width: 28, height: 28)
+                    .fill(Color.accentColor.opacity(0.20))
+                    .overlay(Circle().stroke(Color.accentColor, lineWidth: 2))
+                    .shadow(color: Color.accentColor.opacity(0.5), radius: 5)
+                    .frame(width: 32, height: 32)
             }
-            .shadow(color: emphasized ? Color.accentColor.opacity(0.45) : .clear, radius: 5)
-
-        case "r-stick":
-            ZStack {
-                Circle()
-                    .fill(emphasized ? Color.accentColor.opacity(0.20) : Color.primary.opacity(0.04))
-                    .overlay(
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: emphasized
-                                        ? [Color.accentColor, Color.accentColor.opacity(0.65)]
-                                        : [Color.primary.opacity(0.25), Color.primary.opacity(0.10)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1.5
-                            )
-                    )
-                    .frame(width: 46, height: 46)
-
-                Circle()
-                    .stroke(
-                        emphasized ? Color.accentColor.opacity(0.6) : Color.primary.opacity(0.16),
-                        style: StrokeStyle(lineWidth: 1, dash: [3, 2])
-                    )
-                    .frame(width: 26, height: 26)
-
-                Circle()
-                    .fill(emphasized ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.25))
-                    .frame(width: 5, height: 5)
-            }
-            .shadow(color: emphasized ? Color.accentColor.opacity(0.45) : .clear, radius: 5)
-
-        case "r", "zr":
-            Capsule()
-                .fill(emphasized ? Color.accentColor.opacity(0.24) : Color.primary.opacity(0.06))
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            LinearGradient(
-                                colors: emphasized
-                                    ? [Color.accentColor, Color.accentColor.opacity(0.7)]
-                                    : [Color.primary.opacity(0.22), Color.primary.opacity(0.08)],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            ),
-                            lineWidth: 1.5
-                        )
-                )
-                .shadow(color: emphasized ? Color.accentColor.opacity(0.45) : .clear, radius: 5)
-                .frame(width: 76, height: 34)
-
-        default:
-            Circle()
-                .fill(emphasized ? Color.accentColor.opacity(0.20) : Color.clear)
-                .overlay(Circle().stroke(emphasized ? Color.accentColor : Color.primary.opacity(0.2), lineWidth: 1.5))
-                .shadow(color: emphasized ? Color.accentColor.opacity(0.45) : .clear, radius: 5)
-                .frame(width: 32, height: 32)
         }
+        .opacity(emphasized ? 1.0 : 0.0)
     }
 
     private var stickLegend: some View {
@@ -415,29 +370,23 @@ struct ControllerIllustrationView: View {
         } label: {
             ZStack {
                 Circle()
-                    .fill(emphasized ? Color.accentColor.opacity(0.25) : Color.primary.opacity(0.07))
+                    .fill(emphasized ? Color.accentColor : Color.black.opacity(0.45))
                     .overlay(
                         Circle()
                             .stroke(
-                                LinearGradient(
-                                    colors: emphasized
-                                        ? [Color.accentColor, Color.accentColor.opacity(0.7)]
-                                        : [Color.primary.opacity(0.22), Color.primary.opacity(0.08)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: emphasized ? 1.5 : 1
+                                emphasized ? Color.white.opacity(0.85) : Color.white.opacity(0.20),
+                                lineWidth: emphasized ? 1.5 : 0.8
                             )
                     )
-                    .frame(width: 24, height: 24)
+                    .frame(width: 22, height: 22)
 
                 Image(systemName: symbol)
-                    .font(.system(size: 10, weight: emphasized ? .bold : .semibold))
-                    .foregroundStyle(emphasized ? Color.accentColor : Color.secondary)
+                    .font(.system(size: 9, weight: emphasized ? .heavy : .bold))
+                    .foregroundStyle(Color.white)
             }
-            .shadow(color: emphasized ? Color.accentColor.opacity(0.55) : Color.clear, radius: 5)
-            .scaleEffect(emphasized ? 1.12 : 1.0)
-            .animation(.spring(response: 0.28, dampingFraction: 0.65), value: emphasized)
+            .shadow(color: emphasized ? Color.accentColor.opacity(0.65) : Color.black.opacity(0.3), radius: emphasized ? 5 : 2)
+            .scaleEffect(emphasized ? 1.18 : 1.0)
+            .animation(.spring(response: 0.25, dampingFraction: 0.65), value: emphasized)
         }
         .buttonStyle(.plain)
         .position(x: x * size.width, y: y * size.height)
