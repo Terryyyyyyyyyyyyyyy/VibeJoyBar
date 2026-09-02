@@ -68,6 +68,18 @@ class _AutoPending:
 
 
 @dataclass(slots=True)
+class _MacroRepeatState:
+    """Tracks a repeating macro on a held stick (e.g. continuous scroll)."""
+
+    macro_name: str
+    context_env: dict[str, str]
+    interval_s: float
+    last_fire: float
+    initial_delay_s: float = 0.22
+    first: bool = True
+
+
+@dataclass(slots=True)
 class _MapperState:
     """All mutable tracking state. Per-control keyed by stringified id."""
 
@@ -86,6 +98,8 @@ class _MapperState:
     # stick-id -> (shell_cmd, direction) currently "held" by a stick shell binding,
     # so we can fire a "released" event when the stick returns to center.
     stick_shell_held: dict[str, tuple[str, str]] = field(default_factory=dict)
+    # stick-id -> repeat state for macro held down (e.g. continuous scrolling)
+    stick_macro_repeat: dict[str, _MacroRepeatState] = field(default_factory=dict)
     app_switcher_active: bool = False
     app_switcher_button_id: str | None = None
     # Auto-repeat state for holding the stick while App Switcher is active
@@ -127,6 +141,7 @@ class Mapper:
         self._promote_auto_holds(now)
         self._fire_sequence_repeats(now)
         self._fire_stick_repeats(now)
+        self._fire_stick_macro_repeats(now)
         self._fire_app_switcher_repeat(now)
 
     def release_all(self) -> None:
@@ -344,6 +359,17 @@ class Mapper:
                 action.name,
                 context_env=self._stick_context_env("macro", event),
             )
+            # If this macro contains continuous scroll gestures, repeat while held.
+            macro = self._config.macros.get(action.name)
+            if macro and any(s.strip().startswith("scroll:") for s in macro.steps):
+                self._state.stick_macro_repeat[stick_id] = _MacroRepeatState(
+                    macro_name=action.name,
+                    context_env=self._stick_context_env("macro", event),
+                    interval_s=0.08,
+                    last_fire=time.monotonic(),
+                    initial_delay_s=0.22,
+                    first=True,
+                )
 
         elif isinstance(action, ShellAction):
             self._spawn_shell(
@@ -367,6 +393,7 @@ class Mapper:
         if key is not None:
             self._keyboard.release(key)
         self._state.stick_repeat.pop(stick_id, None)
+        self._state.stick_macro_repeat.pop(stick_id, None)
         held = self._state.stick_shell_held.pop(stick_id, None)
         if held is not None and side is not None:
             cmd, direction = held
@@ -419,6 +446,15 @@ class Mapper:
             repeat.interval_s = _APP_SWITCHER_REPEAT_MS / 1000.0
             self._state.app_switcher_repeat_first = False
         repeat.last_fire = now
+
+    def _fire_stick_macro_repeats(self, now: float) -> None:
+        """Repeat held macros containing continuous actions (e.g. scroll)."""
+        for repeat in list(self._state.stick_macro_repeat.values()):
+            delay = repeat.initial_delay_s if repeat.first else repeat.interval_s
+            if now - repeat.last_fire >= delay:
+                repeat.first = False
+                repeat.last_fire = now
+                self._run_macro(repeat.macro_name, context_env=repeat.context_env)
 
     # ---------- Macros ----------
 

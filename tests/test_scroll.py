@@ -58,5 +58,20 @@ def test_emit_scroll_rejects_unbounded_values() -> None:
         emit_scroll("sideways", 8, _create_event=lambda *args: None, _post_event=lambda *args: None)
 
 
+def test_emit_scroll_applies_window_center_to_event() -> None:
+    event = FakeEvent()
+    targeted: list[tuple[int, object]] = []
+
+    assert emit_scroll(
+        "up",
+        8,
+        _create_event=lambda *args: event,
+        _post_to_pid=lambda pid, value: targeted.append((pid, value)),
+        _frontmost_pid=lambda: 1234,
+        _window_center=lambda pid: (500.0, 400.0),
+    )
+    assert targeted == [(1234, event)]
+
+
 class FakeEvent:
     pass

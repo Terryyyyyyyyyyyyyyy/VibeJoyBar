@@ -409,3 +409,69 @@ class TestAppSwitcherAutoRepeat:
         mapper.poll()
         # Should have been cleared immediately since app_switcher_active is False
         assert mapper._state.app_switcher_repeat is None
+
+
+class TestStickScrollAutoRepeat:
+    """Tests for continuous scrolling auto-repeat when stick is held."""
+
+    def test_scroll_macro_arms_repeat_and_fires_on_poll(
+        self, kbd: FakeKeyboard, win: FakeWindow, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls: list[tuple[str, int]] = []
+        import vibejoy.mapper as mapper_mod
+
+        monkeypatch.setattr(mapper_mod, "emit_scroll", lambda direction, amount: calls.append((direction, amount)))
+        cfg = _config(
+            right_stick={"up": "macro:codex_page_up"},
+            macros={"codex_page_up": MacroDef(steps=("scroll:up@8",))},
+        )
+        mapper = Mapper(cfg, kbd, win)
+        # Flick up — immediate first scroll
+        mapper.on_event(StickEvent(side="right", direction="up"))
+        assert calls == [("up", 8)]
+        assert "right:stick" in mapper._state.stick_macro_repeat
+
+        # Poll before delay expires — no extra fire
+        mapper.poll()
+        assert len(calls) == 1
+
+        # Advance past initial delay (0.22s)
+        mapper._state.stick_macro_repeat["right:stick"].last_fire -= 0.3
+        mapper.poll()
+        assert len(calls) == 2
+        assert calls == [("up", 8), ("up", 8)]
+
+        # Subsequent poll after interval (0.08s) fires again
+        mapper._state.stick_macro_repeat["right:stick"].last_fire -= 0.1
+        mapper.poll()
+        assert len(calls) == 3
+
+    def test_stick_center_clears_scroll_macro_repeat(
+        self, kbd: FakeKeyboard, win: FakeWindow, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls: list[tuple[str, int]] = []
+        import vibejoy.mapper as mapper_mod
+
+        monkeypatch.setattr(mapper_mod, "emit_scroll", lambda direction, amount: calls.append((direction, amount)))
+        cfg = _config(
+            right_stick={"up": "macro:codex_page_up"},
+            macros={"codex_page_up": MacroDef(steps=("scroll:up@8",))},
+        )
+        mapper = Mapper(cfg, kbd, win)
+        mapper.on_event(StickEvent(side="right", direction="up"))
+        assert "right:stick" in mapper._state.stick_macro_repeat
+
+        # Center stick — repeat cleared
+        mapper.on_event(StickEvent(side="right", direction=None))
+        assert "right:stick" not in mapper._state.stick_macro_repeat
+
+    def test_non_scroll_macro_does_not_arm_repeat(
+        self, kbd: FakeKeyboard, win: FakeWindow
+    ) -> None:
+        cfg = _config(
+            right_stick={"left": "macro:codex_previous_thread"},
+            macros={"codex_previous_thread": MacroDef(steps=("combo:cmd+shift+[",))},
+        )
+        mapper = Mapper(cfg, kbd, win)
+        mapper.on_event(StickEvent(side="right", direction="left"))
+        assert "right:stick" not in mapper._state.stick_macro_repeat

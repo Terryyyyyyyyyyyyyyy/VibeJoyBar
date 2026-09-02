@@ -17,15 +17,27 @@ try:  # macOS; keep imports optional so config tests run elsewhere.
         CGEventCreateScrollWheelEvent,
         CGEventPost,
         CGEventPostToPid,
+        CGEventSetLocation,
+        CGPoint,
+        CGWindowListCopyWindowInfo,
         kCGHIDEventTap,
+        kCGNullWindowID,
         kCGScrollEventUnitLine,
+        kCGWindowListExcludeDesktopElements,
+        kCGWindowListOptionOnScreenOnly,
     )
 except ImportError:  # pragma: no cover - CI/non-macOS fallback
     CGEventCreateScrollWheelEvent = None
     CGEventPost = None
     CGEventPostToPid = None
+    CGEventSetLocation = None
+    CGPoint = None
+    CGWindowListCopyWindowInfo = None
     kCGHIDEventTap = 0
+    kCGNullWindowID = 0
     kCGScrollEventUnitLine = 0
+    kCGWindowListExcludeDesktopElements = 0
+    kCGWindowListOptionOnScreenOnly = 0
 
 
 def emit_scroll(
@@ -36,6 +48,7 @@ def emit_scroll(
     _post_event: Callable[..., object] | None = None,
     _post_to_pid: Callable[[int, object], object] | None = None,
     _frontmost_pid: Callable[[], int | None] | None = None,
+    _window_center: Callable[[int | None], tuple[float, float] | None] | None = None,
 ) -> bool:
     """Post one vertical scroll event, returning whether it was emitted.
 
@@ -59,6 +72,17 @@ def emit_scroll(
         delta,
     )
     pid = (_frontmost_pid or _frontmost_process_id)()
+
+    # Ensure the scroll event is explicitly targeted inside the frontmost app's window.
+    # When Joy-Con is held, the mouse cursor is often outside the active window, which
+    # causes macOS window server to drop or misroute unpositioned scroll events.
+    target = (_window_center or _target_window_center)(pid)
+    if target is not None and CGEventSetLocation is not None and CGPoint is not None and event is not None:
+        try:
+            CGEventSetLocation(event, CGPoint(target[0], target[1]))
+        except Exception:
+            pass
+
     if pid and pid > 0 and post_to_pid is not None:
         post_to_pid(pid, event)
     elif post is not None:
@@ -81,3 +105,25 @@ def _frontmost_process_id() -> int | None:
         return pid if pid > 0 else None
     except (ImportError, AttributeError, TypeError, ValueError):
         return None
+
+
+def _target_window_center(pid: int | None) -> tuple[float, float] | None:
+    """Return (x, y) coordinates of the content area of the frontmost window for pid."""
+    if pid is None or pid <= 0 or CGWindowListCopyWindowInfo is None:
+        return None
+    try:
+        windows = CGWindowListCopyWindowInfo(
+            kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
+            kCGNullWindowID,
+        )
+        for w in (windows or []):
+            if w.get("kCGWindowOwnerPID") == pid:
+                b = w.get("kCGWindowBounds")
+                if b and float(b.get("Width", 0)) > 150 and float(b.get("Height", 0)) > 150:
+                    # Target center-right (chat history is in the center-right area, avoiding sidebar)
+                    cx = float(b["X"]) + float(b["Width"]) * 0.6
+                    cy = float(b["Y"]) + float(b["Height"]) * 0.5
+                    return (cx, cy)
+    except Exception:
+        pass
+    return None
