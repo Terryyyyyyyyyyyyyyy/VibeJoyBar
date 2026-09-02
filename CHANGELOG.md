@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3
+
+- Correct right-stick vertical orientation and suppress snapback/cross-axis
+  actions with a stable one-action-per-deflection state machine.
+
 ## 0.5.2
 
 - Preserve Command and Shift flags on Cmd+Tab app-switcher navigation.

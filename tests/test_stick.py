@@ -45,17 +45,16 @@ class TestQuantizeDirection:
 
 
 class TestStickCalibration:
-    def test_normalize_subtracts_baseline_and_inverts_y(self) -> None:
+    def test_normalize_preserves_physical_up_as_positive_y(self) -> None:
         cal = StickCalibration(
             baseline_x=2000, baseline_y=1800, half_range_x=1000, half_range_y=1000
         )
-        nx, ny = cal.normalize(3000, 800)  # dx=+1000, dy=-1000
+        nx, ny = cal.normalize(3000, 2800)  # dx=+1000, dy=+1000 (physical up)
         assert nx == pytest.approx(1.0)
-        # Y is inverted internally so raw-down becomes +1.
         assert ny == pytest.approx(1.0)
 
     def test_clip_at_unit_circle(self) -> None:
         cal = StickCalibration(baseline_x=0, baseline_y=0, half_range_x=100, half_range_y=100)
         nx, ny = cal.normalize(9999, -9999)
         assert nx == 1.0
-        assert ny == 1.0
+        assert ny == -1.0

@@ -42,6 +42,34 @@ class FakeJoyCon:
         }
 
 
+class SequenceJoyCon:
+    """Minimal status source for deterministic stick trajectory replays."""
+
+    def __init__(self, points: list[tuple[int, int]]) -> None:
+        self._joycon_device = FakeDevice()
+        self._points = iter(points)
+        self._last = (0, 0)
+
+    def get_status(self) -> dict:
+        self._last = next(self._points, self._last)
+        x, y = self._last
+        return {"buttons": {}, "analog-sticks": {"right": {"horizontal": x, "vertical": y}}}
+
+
+def _stick_directions(
+    points: list[tuple[int, int]], monkeypatch: pytest.MonkeyPatch, *, deadzone: float = 0.0
+) -> list[str | None]:
+    monkeypatch.setattr(joycon_mod, "Rumbler", FakeRumbler)
+    reader = JoyConReader(SequenceJoyCon(points), "right", deadzone=deadzone)
+    reader._calibration = StickCalibration(0, 0, half_range_x=100, half_range_y=100)
+    return [
+        event.direction
+        for _ in points
+        for event in reader.poll()
+        if hasattr(event, "direction")
+    ]
+
+
 def test_poll_marks_disconnect_closes_hid_and_reconnect_reader_resumes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(joycon_mod, "Rumbler", FakeRumbler)
     sleeping = FakeJoyCon()
@@ -161,3 +189,30 @@ def test_changing_or_missing_raw_report_never_false_disconnects(monkeypatch: pyt
     clock.now = 50.0
     list(fallback.poll())
     assert fallback.is_connected
+
+
+def test_stick_up_ignores_one_frame_right_cross_axis(monkeypatch: pytest.MonkeyPatch) -> None:
+    directions = _stick_directions(
+        [(90, 30), (35, 85), (0, 100), (0, 0), (0, 0)], monkeypatch, deadzone=0.35
+    )
+    assert directions == ["up", None]
+
+
+def test_stick_down_ignores_one_frame_right_cross_axis(monkeypatch: pytest.MonkeyPatch) -> None:
+    directions = _stick_directions([(90, -30), (35, -85), (0, -100), (0, 0), (0, 0)], monkeypatch)
+    assert directions == ["down", None]
+
+
+def test_stick_snapback_does_not_rearm_until_stable_center(monkeypatch: pytest.MonkeyPatch) -> None:
+    directions = _stick_directions(
+        [(-100, 0), (-90, 10), (100, 0), (0, 0), (0, 0)], monkeypatch
+    )
+    assert directions == ["left", None]
+
+
+def test_stick_rearms_for_independent_deflections(monkeypatch: pytest.MonkeyPatch) -> None:
+    directions = _stick_directions(
+        [(-100, 0), (-100, 0), (0, 0), (0, 0), (100, 0), (100, 0), (0, 0), (0, 0)],
+        monkeypatch,
+    )
+    assert directions == ["left", None, "right", None]

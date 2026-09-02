@@ -6,8 +6,9 @@ Responsibilities
   per-unit factory offset — see ``scripts/spike_joycon.py`` for why).
 - Apply a circular deadzone and map the 2-D stick vector to a 4- or 8-way
   direction.
-- Diff successive polls and yield only the transitions (button up/down,
-  stick direction change) so callers don't see duplicate events.
+- Diff successive polls and yield only transitions (button up/down, one
+  direction event per deliberate stick deflection) so callers don't see
+  duplicate or snapback events.
 - Expose the underlying HID device through a :class:`~.rumble.Rumbler`
   so the runner can drive vibration without opening a second handle.
 """
@@ -40,6 +41,15 @@ _SNAPBACK_FRAMES: int = 2
 """Number of consecutive centered frames required to emit a 'center' event.
 Prevents flicker when the stick crosses zero on fast flicks."""
 
+_STICK_CANDIDATE_FRAMES: int = 2
+"""Stable frames required before a direction is considered a deliberate flick."""
+
+_STICK_ENGAGE_MAGNITUDE: float = 0.30
+"""Minimum post-deadzone magnitude for a direction candidate."""
+
+_STICK_RELEASE_MAGNITUDE: float = 0.12
+"""Magnitude at or below which a locked direction is considered centered."""
+
 _DEFAULT_CALIBRATION_SAMPLES: int = 20
 _DEFAULT_CALIBRATION_INTERVAL_S: float = 0.01
 DEFAULT_HEARTBEAT_TIMEOUT_S: float = 2.0
@@ -58,8 +68,9 @@ class StickCalibration:
         """Subtract baseline and scale to approximately [-1.0, 1.0]."""
         nx = (raw_x - self.baseline_x) / max(1, self.half_range_x)
         ny = (raw_y - self.baseline_y) / max(1, self.half_range_y)
-        # Invert Y so up = +1 (pyjoycon reports raw ADC; higher Y raw is "up" on R-stick)
-        return _clip(nx), _clip(-ny)
+        # pyjoycon's raw ADC increases toward physical up on the right stick,
+        # so preserving the sign gives the semantic convention up = +1.
+        return _clip(nx), _clip(ny)
 
 
 @dataclass
@@ -67,7 +78,9 @@ class _ReaderState:
     """Mutable per-reader state kept apart from config so ``poll()`` stays readable."""
 
     prev_buttons: set[str] = field(default_factory=set)
-    prev_direction: Direction | None = None
+    locked_direction: Direction | None = None
+    candidate_direction: Direction | None = None
+    candidate_frames: int = 0
     center_frames: int = 0
 
 
@@ -227,21 +240,42 @@ class JoyConReader:
         fx, fy = apply_circular_deadzone(nx, ny, self._deadzone)
         direction = quantize_direction(fx, fy, self._stick_mode)
 
-        # Debounce the "centered" transition so a fast flick doesn't
-        # register an extra release.
-        if direction is None and self._state.prev_direction is not None:
-            self._state.center_frames += 1
-            if self._state.center_frames < _SNAPBACK_FRAMES:
-                return
-            yield StickEvent(side=self._side, direction=None)
-            self._state.prev_direction = None
-            self._state.center_frames = 0
+        magnitude = math.hypot(fx, fy)
+
+        # Once a flick has fired, lock it until the stick is stably centered.
+        # This prevents diagonal ramp-up/snapback transitions from firing a
+        # second mapped action (and preserves the old center debounce).
+        if self._state.locked_direction is not None:
+            if magnitude <= _STICK_RELEASE_MAGNITUDE:
+                self._state.center_frames += 1
+                if self._state.center_frames >= _SNAPBACK_FRAMES:
+                    yield StickEvent(side=self._side, direction=None)
+                    self._state.locked_direction = None
+                    self._state.center_frames = 0
+                    self._state.candidate_direction = None
+                    self._state.candidate_frames = 0
+            else:
+                self._state.center_frames = 0
             return
 
-        if direction is not None and direction != self._state.prev_direction:
-            self._state.center_frames = 0
+        # Idle sticks need a deliberate magnitude and two matching frames.
+        # A one-frame cross-axis sample during a physical up/down movement is
+        # therefore discarded instead of becoming a spurious action.
+        self._state.center_frames = 0
+        if direction is None or magnitude < _STICK_ENGAGE_MAGNITUDE:
+            self._state.candidate_direction = None
+            self._state.candidate_frames = 0
+            return
+        if direction == self._state.candidate_direction:
+            self._state.candidate_frames += 1
+        else:
+            self._state.candidate_direction = direction
+            self._state.candidate_frames = 1
+        if self._state.candidate_frames >= _STICK_CANDIDATE_FRAMES:
+            self._state.locked_direction = direction
+            self._state.candidate_direction = None
+            self._state.candidate_frames = 0
             yield StickEvent(side=self._side, direction=direction)
-            self._state.prev_direction = direction
 
     def _read_raw_stick(self) -> tuple[int, int]:
         status = self._joycon.get_status()
@@ -326,7 +360,7 @@ def apply_circular_deadzone(x: float, y: float, deadzone: float) -> tuple[float,
     the deadzone boundary maps to 0 and the unit circle to 1.
     """
     magnitude = math.hypot(x, y)
-    if magnitude < deadzone:
+    if magnitude <= deadzone or magnitude == 0.0:
         return (0.0, 0.0)
     scale = min(1.0, (magnitude - deadzone) / (1.0 - deadzone))
     return (x / magnitude * scale, y / magnitude * scale)
