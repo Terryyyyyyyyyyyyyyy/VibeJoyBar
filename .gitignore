@@ -1,0 +1,32 @@
+# OS
+.DS_Store
+
+# Reference material and large binaries (200MB+)
+JoyType-source/
+*.dmg
+JoyType-config.yaml
+audit/
+backups/
+
+# CodeGraph local AST cache
+.codegraph/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Swift / Xcode
+.build/
+*.xcodeproj
+DerivedData/
+
+# Logs & sockets
+*.log
+*.sock
+.git_standalone/
+*.git_standalone
