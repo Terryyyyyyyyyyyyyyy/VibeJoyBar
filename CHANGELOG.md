@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0
+
+- Stick Up/Down native mouse wheel scrolling with smooth 60ms repeat.
+- Display-boundary-aware scroll event targeting for edge-docked apps (Codex / ChatGPT).
+- Hardened Joy-Con ADC calibration with non-empty packet polling and baseline clamping.
+- Re-architected VibeJoyBar UI: exact pixel-aligned hotspots, shape-adaptive button indicators, unified directional stick compass, and hidden idle indicators.
+
 ## 0.5.3
 
 - Correct right-stick vertical orientation and suppress snapback/cross-axis
