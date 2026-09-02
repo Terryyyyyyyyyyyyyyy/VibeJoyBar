@@ -1,0 +1,95 @@
+name: 🐛 Bug report
+description: Something misbehaves — a button doesn't fire, rumble fails, config is rejected unexpectedly, etc.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. The more details you give, the faster it gets fixed.
+
+        Before you start:
+        - Run `vibejoy doctor` and include the output.
+        - Run `vibejoy validate` and confirm your config parses.
+        - Skim existing issues — this project is small, duplicates happen.
+
+  - type: input
+    id: version
+    attributes:
+      label: VibeJoy version
+      description: "Output of `vibejoy --version`."
+      placeholder: "vibejoy 0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "14.5 (Sonoma)"
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "3.11.9"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: side
+    attributes:
+      label: Which Joy-Con(s) are paired?
+      options:
+        - right
+        - left
+        - both
+        - none (failing to detect)
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: `vibejoy doctor` output
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config snippet
+      description: Only the section that triggers the bug. **Redact shell commands that contain secrets.**
+      render: toml
+    validations:
+      required: false
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Configure `[profile.right.buttons] a = "..."` like so.
+        2. Run `vibejoy run`.
+        3. Press A.
+        4. Observe X, expected Y.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What actually happened?
+      description: Include error text, logs (`vibejoy run -v`), or screenshots if relevant.
+    validations:
+      required: true

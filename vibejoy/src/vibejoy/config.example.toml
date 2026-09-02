@@ -1,0 +1,114 @@
+# VibeJoy — Joy-Con → macOS keyboard mapping.
+#
+# Everything here is a single TOML file.  Edit it by hand, or let an AI
+# rewrite it — run `vibejoy validate` after changes to catch typos.
+#
+# Action DSL (one string per binding):
+#   none                       no-op
+#   tap:<key>                  press + release once
+#   hold:<key>                 press while input held, release on input-up
+#   repeat:<key>[@<ms>]        tap repeatedly while held (sticks only)
+#   auto:<key>[@<ms>]          short press = tap, long press (>= ms) = hold
+#   combo:<k1>+<k2>+...        chord (e.g. combo:cmd+shift+p)
+#   sequence:<mod>+<k>[@<ms>]  hold mod, tap rest; optional repeat interval
+#   type:<text>                type a literal string
+#   delay:<ms>                 wait (only inside [macro.*].steps)
+#   scroll:<up|down>[@<amount>] native vertical scroll (macro only; one gesture)
+#   macro:<name>               run a [macro.<name>] block
+#   window_switch:<a>,<b>,...  cycle focus between apps (by name or bundle id)
+#   app_switcher:system         hold Cmd+Tab; right stick cycles, left reverses
+#   shell:<command>            run /bin/sh -c <command>, non-blocking;
+#                              fires on both press and release with
+#                              $VIBEJOY_EVENT=pressed|released
+
+[global]
+deadzone       = 0.2    # stick radial deadzone, 0..1
+poll_hz        = 100    # polling frequency
+long_press_ms  = 250    # auto:<key>'s short-vs-long threshold
+stick_mode     = "4dir" # "4dir" or "8dir"
+
+# ─────────── Right Joy-Con ───────────
+
+[profile.right.buttons]
+a       = "tap:enter"
+b       = "tap:escape"
+x       = "combo:option+0"
+y       = "combo:option+1"
+r       = "combo:option+2"           # Type4Me Prompt 优化; not app-switch mode
+zr      = "app_switcher:system"     # hold for Cmd+Tab; right stick navigates
+plus    = "combo:cmd+s"
+home    = "window_switch:com.openai.codex" # ChatGPT app bundle (Codex)
+"r-stick" = "none"
+sl      = "none"
+sr      = "none"
+
+[profile.right.stick]
+up      = "macro:codex_page_up"          # one page up in the current Codex chat
+down    = "macro:codex_page_down"        # one page down in the current Codex chat
+left    = "macro:codex_previous_thread"  # previous Codex chat; ZR still overrides this
+right   = "macro:codex_next_thread"      # next Codex chat; ZR still overrides this
+
+# ─────────── Left Joy-Con (only used if paired) ───────────
+
+[profile.left.buttons]
+a       = "tap:enter"
+b       = "tap:escape"
+l       = "combo:cmd+tab"
+zl      = "hold:cmd"
+minus   = "combo:cmd+z"
+capture = "combo:cmd+shift+3"           # macOS screenshot
+"l-stick" = "tap:tab"
+
+[profile.left.stick]
+up      = "none"
+down    = "none"
+left    = "none"
+right   = "none"
+
+# ─────────── Macros ───────────
+# Macros are ordered lists of DSL steps.  `if_app` optionally restricts
+# a macro to when a specific app is in the foreground (matched against
+# localized name or bundle id, case-insensitive substring).
+
+[macro.codex_page_up]
+if_app  = "com.openai.codex"
+steps   = ["scroll:up@8"]
+
+[macro.codex_page_down]
+if_app  = "com.openai.codex"
+steps   = ["scroll:down@8"]
+
+[macro.codex_previous_thread]
+if_app  = "com.openai.codex"
+steps   = ["combo:cmd+shift+["]
+
+[macro.codex_next_thread]
+if_app  = "com.openai.codex"
+steps   = ["combo:cmd+shift+]"]
+
+[macro.claude_focus]
+if_app  = "Visual Studio Code"
+steps   = [
+  "combo:cmd+shift+p",
+  "delay:100",
+  "type:Claude Code: Focus input",
+  "delay:100",
+  "tap:enter",
+]
+
+# Shell actions receive these env vars automatically:
+#   VIBEJOY_EVENT        pressed | released | macro
+#   VIBEJOY_BUTTON       e.g. "zr"       (button triggers only)
+#   VIBEJOY_SIDE         left | right
+#   VIBEJOY_DIRECTION    e.g. "up-right" (stick triggers only)
+#   VIBEJOY_FRONTMOST_APP  localized name of the foreground app
+#
+# A script that wants to act only on press:
+#   [ "$VIBEJOY_EVENT" = "pressed" ] || exit 0
+#
+# A macro step can shell too:
+# [macro.log_and_notify]
+# steps = [
+#   "shell:date +%T >> ~/vibejoy.log",
+#   "shell:osascript -e 'display notification \"buzzed\"'",
+# ]

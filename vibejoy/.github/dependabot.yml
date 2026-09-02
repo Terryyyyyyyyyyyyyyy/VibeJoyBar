@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # Keep Actions versions fresh; PRs batched monthly.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ["*"]
+    labels:
+      - "dependencies"
+      - "ci"
+
+  # Direct Python deps only — transitive updates are upstream's responsibility.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5
+    allow:
+      - dependency-type: "direct"
+    labels:
+      - "dependencies"
+      - "python"
+    groups:
+      python-deps:
+        patterns: ["*"]

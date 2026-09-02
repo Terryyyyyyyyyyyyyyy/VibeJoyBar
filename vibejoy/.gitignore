@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+*.egg
+dist/
+build/
+
+# uv / venv
+.venv/
+venv/
+.python-version-local
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+
+# Project-local
+.claude/
+*.log
+config.local.toml

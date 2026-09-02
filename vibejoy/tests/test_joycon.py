@@ -1,0 +1,257 @@
+from __future__ import annotations
+
+import pytest
+
+import vibejoy.joycon as joycon_mod
+import vibejoy.runner as runner_mod
+from vibejoy.config import Config, GlobalConfig, ProfileConfig
+from vibejoy.joycon import JoyConReader, StickCalibration
+
+
+class FakeDevice:
+    def __init__(self) -> None:
+        self.closed = False
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class FakeRumbler:
+    def __init__(self, device, *, side_name: str) -> None:
+        self.device = device
+
+    def stop(self) -> None:
+        return None
+
+    def close(self) -> None:
+        self.device.close()
+
+
+class FakeJoyCon:
+    def __init__(self) -> None:
+        self._joycon_device = FakeDevice()
+        self.fail = True
+
+    def get_status(self) -> dict:
+        if self.fail:
+            self.fail = False
+            raise OSError("device asleep")
+        return {
+            "buttons": {"right": {"a": True}},
+            "analog-sticks": {"right": {"horizontal": 0, "vertical": 0}},
+        }
+
+
+class SequenceJoyCon:
+    """Minimal status source for deterministic stick trajectory replays."""
+
+    def __init__(self, points: list[tuple[int, int]]) -> None:
+        self._joycon_device = FakeDevice()
+        self._points = iter(points)
+        self._last = (0, 0)
+
+    def get_status(self) -> dict:
+        self._last = next(self._points, self._last)
+        x, y = self._last
+        return {"buttons": {}, "analog-sticks": {"right": {"horizontal": x, "vertical": y}}}
+
+
+def _stick_directions(
+    points: list[tuple[int, int]], monkeypatch: pytest.MonkeyPatch, *, deadzone: float = 0.0
+) -> list[str | None]:
+    monkeypatch.setattr(joycon_mod, "Rumbler", FakeRumbler)
+    reader = JoyConReader(SequenceJoyCon(points), "right", deadzone=deadzone)
+    reader._calibration = StickCalibration(0, 0, half_range_x=100, half_range_y=100)
+    return [
+        event.direction
+        for _ in points
+        for event in reader.poll()
+        if hasattr(event, "direction")
+    ]
+
+
+def test_poll_marks_disconnect_closes_hid_and_reconnect_reader_resumes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(joycon_mod, "Rumbler", FakeRumbler)
+    sleeping = FakeJoyCon()
+    reader = JoyConReader(sleeping, "right")
+    assert list(reader.poll()) == []
+    assert not reader.is_connected
+    assert sleeping._joycon_device.closed
+
+    reconnected = FakeJoyCon()
+    reconnected.fail = False
+    replacement = JoyConReader(reconnected, "right")
+    replacement._calibration = StickCalibration(0, 0)
+    events = list(replacement.poll())
+    assert replacement.is_connected
+    assert any(getattr(event, "button", None) == "a" for event in events)
+    replacement.close()
+    assert reconnected._joycon_device.closed
+
+
+class FakeReconnectReader:
+    def __init__(self) -> None:
+        self.side = "right"
+        self.is_connected = True
+        self.rumbler = object()
+        self.calibrated = False
+        self.closed = False
+
+    def calibrate(self) -> None:
+        self.calibrated = True
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class FakeMapper:
+    def release_all(self) -> None:
+        return None
+
+
+def test_runner_rediscovery_adds_and_calibrates_missing_side(monkeypatch: pytest.MonkeyPatch) -> None:
+    replacement = FakeReconnectReader()
+    monkeypatch.setattr(runner_mod, "discover_readers", lambda **_: [replacement])
+    config = Config(global_=GlobalConfig(), profiles={"right": ProfileConfig()}, macros={})
+    readers: list[FakeReconnectReader] = []
+    rumblers: dict[str, object] = {}
+    runner_mod._rediscover_missing(readers, FakeMapper(), config, rumblers)  # type: ignore[arg-type]
+    assert readers == [replacement]
+    assert replacement.calibrated
+    assert rumblers["right"] is replacement.rumbler
+
+
+def test_runner_rediscovery_never_reopens_live_side(monkeypatch: pytest.MonkeyPatch) -> None:
+    live = FakeReconnectReader()
+    replacement = FakeReconnectReader()
+    replacement.side = "left"
+    calls: list[set[str]] = []
+
+    def discover(**kwargs):
+        calls.append(set(kwargs["sides"]))
+        return [replacement]
+
+    monkeypatch.setattr(runner_mod, "discover_readers", discover)
+    config = Config(global_=GlobalConfig(), profiles={"right": ProfileConfig()}, macros={})
+    readers = [live]
+    rumblers: dict[str, object] = {"right": live.rumbler}
+    runner_mod._rediscover_missing(readers, FakeMapper(), config, rumblers)  # type: ignore[arg-type]
+    assert calls == [{"left"}]
+    assert live.closed is False
+    assert readers == [live, replacement]
+
+
+class HeartbeatClock:
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+class HeartbeatJoyCon(FakeJoyCon):
+    def __init__(self) -> None:
+        super().__init__()
+        self._input_report = bytearray(b"\x01\x00\x00")
+        self.fail = False
+
+
+def test_raw_report_heartbeat_detects_sleep_without_oserror(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(joycon_mod, "Rumbler", FakeRumbler)
+    clock = HeartbeatClock()
+    fake = HeartbeatJoyCon()
+    reader = JoyConReader(fake, "right", heartbeat_timeout_s=2.0, clock=clock)
+    list(reader.poll())
+    assert reader.is_connected
+    clock.now = 1.9
+    list(reader.poll())
+    assert reader.is_connected
+    clock.now = 2.1
+    list(reader.poll())
+    assert not reader.is_connected
+    assert fake._joycon_device.closed
+
+
+def test_changing_or_missing_raw_report_never_false_disconnects(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(joycon_mod, "Rumbler", FakeRumbler)
+    clock = HeartbeatClock()
+    changing = HeartbeatJoyCon()
+    reader = JoyConReader(changing, "right", heartbeat_timeout_s=1.0, clock=clock)
+    list(reader.poll())
+    clock.now = 5.0
+    changing._input_report[0] = 2
+    list(reader.poll())
+    assert reader.is_connected
+
+    without_report = FakeJoyCon()
+    without_report.fail = False
+    fallback = JoyConReader(without_report, "left", heartbeat_timeout_s=1.0, clock=clock)
+    clock.now = 50.0
+    list(fallback.poll())
+    assert fallback.is_connected
+
+
+def test_stick_up_ignores_one_frame_right_cross_axis(monkeypatch: pytest.MonkeyPatch) -> None:
+    directions = _stick_directions(
+        [(90, 30), (35, 85), (0, 100), (0, 0), (0, 0)], monkeypatch, deadzone=0.35
+    )
+    assert directions == ["up", None]
+
+
+def test_stick_down_ignores_one_frame_right_cross_axis(monkeypatch: pytest.MonkeyPatch) -> None:
+    directions = _stick_directions([(90, -30), (35, -85), (0, -100), (0, 0), (0, 0)], monkeypatch)
+    assert directions == ["down", None]
+
+
+def test_stick_snapback_does_not_rearm_until_stable_center(monkeypatch: pytest.MonkeyPatch) -> None:
+    directions = _stick_directions(
+        [(-100, 0), (-90, 10), (100, 0), (0, 0), (0, 0)], monkeypatch
+    )
+    assert directions == ["left", None]
+
+
+def test_stick_rearms_for_independent_deflections(monkeypatch: pytest.MonkeyPatch) -> None:
+    directions = _stick_directions(
+        [(-100, 0), (-100, 0), (0, 0), (0, 0), (100, 0), (100, 0), (0, 0), (0, 0)],
+        monkeypatch,
+    )
+    assert directions == ["left", None, "right", None]
+
+
+def test_stick_low_magnitude_triggers_past_deadzone(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A flick just past the deadzone must trigger (engage threshold is now 0.05).
+
+    With deadzone=0.35 and half_range=100, raw=40 gives normalised magnitude 0.40.
+    Post-deadzone rescale: (0.40 - 0.35) / (1 - 0.35) ≈ 0.077 > _STICK_ENGAGE_MAGNITUDE (0.05).
+    """
+    raw = 40  # half_range=100 → normalised 0.40
+    directions = _stick_directions(
+        [(raw, 0), (raw, 0), (0, 0), (0, 0)], monkeypatch, deadzone=0.35
+    )
+    assert "right" in directions
+
+
+def test_stick_below_deadzone_never_triggers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A deflection inside the deadzone must produce no direction events."""
+    raw = 30  # normalised 0.30 < deadzone 0.35 → post-deadzone = 0.0
+    directions = _stick_directions(
+        [(raw, 0), (raw, 0), (0, 0), (0, 0)], monkeypatch, deadzone=0.35
+    )
+    assert directions == []
+
+
+def test_stick_release_threshold_allows_quick_rearm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The stick rearming after dropping below release threshold (0.08).
+
+    hi=45 → post-deadzone ≈ 0.154 (above engage=0.05).
+    lo=36 → post-deadzone ≈ 0.015 (below release=0.08) — unlocks the state machine.
+    Second push of hi should produce a second 'left' direction event.
+    """
+    hi, lo = 45, 36
+    directions = _stick_directions(
+        [(-hi, 0), (-hi, 0), (-lo, 0), (-lo, 0), (-hi, 0), (-hi, 0), (0, 0), (0, 0)],
+        monkeypatch,
+        deadzone=0.35,
+    )
+    assert directions.count("left") == 2
+    assert directions.count(None) >= 1

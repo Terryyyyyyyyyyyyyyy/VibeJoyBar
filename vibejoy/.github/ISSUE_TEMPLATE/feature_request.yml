@@ -1,0 +1,46 @@
+name: ✨ Feature request
+description: Propose a new action verb, CLI command, config option, or integration.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        VibeJoy deliberately stays small. A new feature should earn its keep — explain the concrete use case before the mechanism.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the workflow. What would the ideal outcome look like from your side?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Sketch the API. For a new action verb, show what the TOML line would look like.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: |
+        For example: "I could write a macro with 4 steps, but that's ugly because…"
+        or "There's an existing tool X that does this, but it doesn't fit because…"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - Small — new preset / config option / doc fix
+        - Medium — new action verb / CLI subcommand
+        - Large — architectural change
+    validations:
+      required: true
