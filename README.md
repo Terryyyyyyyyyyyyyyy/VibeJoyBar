@@ -1,8 +1,8 @@
-# VibeJoy 🎮
+# VibeJoyBar 🎮
 
-> 将 Nintendo Switch Joy-Con 打造为 macOS 下极致顺手的随身编程、AI 协作与桌面生产力控制器。
+> 将 Nintendo Switch Joy-Con 打造为 macOS 下极致顺手的随身编程、AI 协作与桌面生产力菜单栏伴侣套件。
 
-VibeJoy 是一套专为 macOS 打造的高性能手柄生产力套件。通过极低延迟的 HID 原生驱动与精致的 Swift 菜单栏伴侣，让你的单手 Joy-Con 摇身一变成为控制终端、AI 助手（Codex / ChatGPT / Claude Code）、文本润色与窗口切换的效率神器。
+**VibeJoyBar** 是一套专为 macOS 打造的高性能手柄生产力套件。通过极低延迟的 HID 原生驱动与精致的 Swift 菜单栏伴侣，让你的单手 Joy-Con 摇身一变成为控制终端、AI 助手（Codex / ChatGPT / Claude Code）、文本润色与窗口切换的效率神器。
 
 ---
 
@@ -21,7 +21,7 @@ VibeJoy 是一套专为 macOS 打造的高性能手柄生产力套件。通过�
 本项目由两大部分深度协同构成：
 
 ```
-VibeJoy/
+VibeJoyBar/
 ├── vibejoy/        # Python 3.11+ 底层核心驱动 (HID 通信、事件调度、滚轮平滑、IPC 服务)
 └── VibeJoyBar/     # macOS 原生 Swift 6 菜单栏应用 (可视化控制器面板、映射检查器)
 ```
@@ -39,7 +39,7 @@ VibeJoy/
 
 ## ❤️ 致谢与致敬 (Acknowledgments & Credits)
 
-VibeJoy 项目在诞生与演进过程中，深深吸纳并受益于开源社区先行者的优秀设计与卓越开拓。特向以下两位作者及其项目致以最诚挚的敬意：
+VibeJoyBar 项目在诞生与演进过程中，深深吸纳并受益于开源社区先行者的优秀设计与卓越开拓。特向以下两位作者及其项目致以最诚挚的敬意：
 
 1. **[vibejoy](https://github.com/WEIFENG2333/vibejoy)** by **[@WEIFENG2333](https://github.com/WEIFENG2333)** (liangweifeng):
    - 奠定了本项目极为优秀的 Unix 哲学底层基石——基于 macOS 原生 HID 通信驱动、直观优雅的 TOML DSL 映射规范、低延迟的按键状态机以及轻量高效的 Unix Socket IPC 架构。感谢梁炜峰的开拓性贡献！
