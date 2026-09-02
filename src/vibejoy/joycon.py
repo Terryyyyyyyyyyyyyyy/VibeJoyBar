@@ -152,21 +152,45 @@ class JoyConReader:
         Assumes the user is not touching the stick. Silently accepts any
         offset — Joy-Con factory calibration varies by unit.
         """
+        # Wait up to 0.5s for the pyjoycon background thread to receive its first valid packet
+        for _ in range(25):
+            raw = getattr(self._joycon, "_input_report", None)
+            if raw and any(raw):
+                break
+            time.sleep(0.02)
+
         sum_x = 0
         sum_y = 0
+        valid_samples = 0
         for _ in range(samples):
             try:
                 raw_x, raw_y = self._read_raw_stick()
             except OSError:
                 self._mark_disconnected()
                 raise
-            sum_x += raw_x
-            sum_y += raw_y
+            # Joy-Con stick ADC is 12-bit (0..4095), center is near 2048.
+            # Only accumulate if within plausible ADC range (> 500)
+            if raw_x > 500 and raw_y > 500:
+                sum_x += raw_x
+                sum_y += raw_y
+                valid_samples += 1
             time.sleep(interval_s)
 
+        baseline_x = (sum_x // valid_samples) if valid_samples > 0 else 2048
+        baseline_y = (sum_y // valid_samples) if valid_samples > 0 else 2048
+
+        # Plausibility sanity check: standard Joy-Con rest is ~2048 (range 1200..2800).
+        # Clamping avoids permanent stick-lock when Bluetooth initializes with partial frames.
+        if not (1200 <= baseline_x <= 2800):
+            logger.warning("%s stick calibration x=%d abnormal; using 2048", self._side, baseline_x)
+            baseline_x = 2048
+        if not (1200 <= baseline_y <= 2800):
+            logger.warning("%s stick calibration y=%d abnormal; using 2048", self._side, baseline_y)
+            baseline_y = 2048
+
         cal = StickCalibration(
-            baseline_x=sum_x // samples,
-            baseline_y=sum_y // samples,
+            baseline_x=baseline_x,
+            baseline_y=baseline_y,
         )
         self._calibration = cal
         logger.info(

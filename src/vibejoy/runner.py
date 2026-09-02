@@ -77,7 +77,7 @@ def run(
     try:
         _calibrate_available(readers)
         rumblers_by_side.update({r.side: r.rumbler for r in readers})
-        control_server = _start_control_server(rumblers_by_side, readers, stop_event)
+        control_server = _start_control_server(rumblers_by_side, readers, stop_event, mapper=mapper)
         _print_banner(readers, config)
         _main_loop(readers, mapper, config, stop_event, rumblers_by_side=rumblers_by_side)
     except KeyboardInterrupt:
@@ -225,6 +225,8 @@ def _start_control_server(
     rumblers_by_side: dict[Side, Rumbler],
     readers: list[JoyConReader],
     stop_event: threading.Event,
+    *,
+    mapper: Mapper | None = None,
 ) -> ControlServer | None:
     """Install the IPC handler. Failure to bind is non-fatal."""
 
@@ -233,6 +235,35 @@ def _start_control_server(
             from . import __version__
 
             return {"pong": True, "version": __version__}
+
+        if request.cmd == "debug":
+            return {
+                "readers": [
+                    {
+                        "side": r.side,
+                        "connected": r.is_connected,
+                        "calibration": {
+                            "baseline_x": r.calibration.baseline_x,
+                            "baseline_y": r.calibration.baseline_y,
+                            "half_range_x": r.calibration.half_range_x,
+                            "half_range_y": r.calibration.half_range_y,
+                        }
+                        if r.calibration
+                        else None,
+                        "raw_stick": r._read_raw_stick(),
+                        "locked_direction": r._state.locked_direction,
+                        "candidate_direction": r._state.candidate_direction,
+                    }
+                    for r in readers
+                ],
+                "mapper": {
+                    "app_switcher_active": mapper._state.app_switcher_active if mapper else None,
+                    "holds": list(mapper._state.holds.keys()) if mapper else [],
+                    "stick_holds": list(mapper._state.stick_holds.keys()) if mapper else [],
+                    "stick_repeat": list(mapper._state.stick_repeat.keys()) if mapper else [],
+                    "stick_macro_repeat": list(mapper._state.stick_macro_repeat.keys()) if mapper else [],
+                },
+            }
 
         if request.cmd == "status":
             live_readers = [r for r in readers if r.is_connected]
