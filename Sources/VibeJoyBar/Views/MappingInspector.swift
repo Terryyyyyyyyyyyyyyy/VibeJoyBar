@@ -74,7 +74,7 @@ struct MappingInspector: View {
                     }
                     DeadzonePreviewView(deadzone: model.configStore.deadzone)
                         .frame(height: 110)
-                    Text("红色区域内的摇杆偏移不会触发动作。在"摇杆设置"中可调节死区大小。")
+                    Text("红色区域内的摇杆偏移不会触发动作。在\u{201C}摇杆设置\u{201D}中可调节死区大小。")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
