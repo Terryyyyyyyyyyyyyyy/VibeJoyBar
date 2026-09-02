@@ -35,11 +35,25 @@ struct ControllerIllustrationView: View {
             }
             .padding(.horizontal, 24).padding(.top, 22)
 
-            Spacer(minLength: 8)
             if mode == .front {
+                // Shoulder key quick-access capsules — visible without switching Tab
+                HStack(spacing: 10) {
+                    Text("肩键")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                    shoulderCapsule("r", label: "R")
+                    shoulderCapsule("zr", label: "ZR")
+                    Spacer()
+                }
+                .padding(.horizontal, 26)
+                .padding(.top, 10)
+
                 stickLegend
                     .padding(.horizontal, 24)
+                    .padding(.top, 6)
             }
+
+            Spacer(minLength: 8)
             assetCanvas
             Spacer(minLength: 8)
             Text("点击控制选择映射 · Tab 切换焦点")
@@ -48,6 +62,28 @@ struct ControllerIllustrationView: View {
                 .padding(.bottom, 16)
         }
         .background(.regularMaterial)
+    }
+
+    private func shoulderCapsule(_ id: String, label: String) -> some View {
+        let isSelected = selection == .button(id)
+        return Button { selection = .button(id) } label: {
+            Text(label)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(isSelected ? Color.white : Color.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    isSelected ? Color.accentColor : Color.primary.opacity(0.08),
+                    in: Capsule()
+                )
+                .overlay(Capsule().stroke(isSelected ? Color.clear : Color.primary.opacity(0.15), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered in
+            if isHovered { hoveredHotspot = id } else if hoveredHotspot == id { hoveredHotspot = nil }
+        }
+        .accessibilityLabel("\(label) 肩键映射")
+        .help("编辑 \(label) 映射")
     }
 
     @ViewBuilder private var assetCanvas: some View {
@@ -75,7 +111,11 @@ struct ControllerIllustrationView: View {
         }
     }
 
-    private func controllerAsset<Hotspots: View>(_ name: String, aspect: CGFloat, @ViewBuilder hotspots: @escaping (CGSize) -> Hotspots) -> some View {
+    private func controllerAsset<Hotspots: View>(
+        _ name: String,
+        aspect: CGFloat,
+        @ViewBuilder hotspots: @escaping (CGSize) -> Hotspots
+    ) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 18)
                 .fill(.quaternary.opacity(0.30))
@@ -125,26 +165,21 @@ struct ControllerIllustrationView: View {
         return .module
     }
 
+    // Hotspot shows only a ring on hover/selection — no text overlay on the image.
     private func faceHotspot(_ id: String, x: CGFloat, y: CGFloat, in size: CGSize) -> some View {
         let emphasized = selection == .button(id) || hoveredHotspot == id || focusedHotspot == id
+        let diameter: CGFloat = id == "r-stick" ? 45 : 32
         return Button { selection = .button(id) } label: {
-            ZStack {
-                Circle()
-                    .fill(emphasized ? Color.accentColor.opacity(0.20) : .clear)
-                    .overlay(Circle().stroke(emphasized ? Color.accentColor : .clear, lineWidth: emphasized ? 2.5 : 0))
-                if emphasized {
-                    Text(hotspotTitle(id))
-                        .font(.system(size: id == "r-stick" ? 8 : 10, weight: .bold, design: .rounded))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(Color.accentColor)
-                        .padding(3)
-                }
-            }
-            .frame(width: id == "r-stick" ? 45 : 32, height: id == "r-stick" ? 45 : 32)
+            Circle()
+                .fill(emphasized ? Color.accentColor.opacity(0.18) : Color.clear)
+                .overlay(Circle().stroke(emphasized ? Color.accentColor : Color.clear, lineWidth: emphasized ? 2.5 : 0))
+                .frame(width: diameter, height: diameter)
         }
         .buttonStyle(.plain)
         .position(x: x * size.width, y: y * size.height)
-        .onHover { hoveredHotspot = $0 ? id : nil }
+        .onHover { isHovered in
+            if isHovered { hoveredHotspot = id } else if hoveredHotspot == id { hoveredHotspot = nil }
+        }
         .focused($focusedHotspot, equals: id)
         .accessibilityLabel("\(hotspotTitle(id)) 控制")
         .accessibilityHint("打开映射检查器")

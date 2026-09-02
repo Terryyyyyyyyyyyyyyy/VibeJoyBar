@@ -19,17 +19,22 @@ struct DashboardSidebar: View {
                         ForEach(model.configStore.stickBindings) { binding in
                             stickRow(binding)
                         }
-                        Button { showingStickEditor = true } label: {
-                            Label("摇杆灵敏度与高级设置", systemImage: "slider.horizontal.3")
-                                .font(.caption)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .buttonStyle(.plain).foregroundStyle(.secondary).padding(.horizontal, 9).padding(.top, 3)
                     }
                 }
                 .padding(.horizontal, 12)
-                .padding(.bottom, 16)
+                .padding(.bottom, 8)
             }
+            // Pinned footer — always visible regardless of scroll position
+            Divider()
+            Button { showingStickEditor = true } label: {
+                Label("摇杆灵敏度与高级设置", systemImage: "slider.horizontal.3")
+                    .font(.caption)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 21)
+            .padding(.vertical, 10)
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .background(.bar)
