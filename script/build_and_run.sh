@@ -121,6 +121,9 @@ open_app() {
 }
 
 case "$MODE" in
+  build|--build)
+    echo "Successfully packaged: $APP_BUNDLE"
+    ;;
   run)
     open_app
     ;;
