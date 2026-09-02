@@ -109,6 +109,12 @@ def _target_window_center(pid: int | None) -> tuple[float, float] | None:
     if pid is None or pid <= 0 or CGWindowListCopyWindowInfo is None:
         return None
     try:
+        from AppKit import NSScreen
+
+        main_screen = NSScreen.mainScreen()
+        screen_w = float(main_screen.frame().size.width) if main_screen is not None else 1920.0
+        screen_h = float(main_screen.frame().size.height) if main_screen is not None else 1080.0
+
         windows = CGWindowListCopyWindowInfo(
             kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
             kCGNullWindowID,
@@ -117,10 +123,25 @@ def _target_window_center(pid: int | None) -> tuple[float, float] | None:
             if w.get("kCGWindowOwnerPID") == pid:
                 b = w.get("kCGWindowBounds")
                 if b and float(b.get("Width", 0)) > 150 and float(b.get("Height", 0)) > 150:
-                    # Target center-right (chat history is in the center-right area, avoiding sidebar)
-                    cx = float(b["X"]) + float(b["Width"]) * 0.6
-                    cy = float(b["Y"]) + float(b["Height"]) * 0.5
-                    return (cx, cy)
+                    wx = float(b.get("X", 0))
+                    wy = float(b.get("Y", 0))
+                    ww = float(b.get("Width", 0))
+                    wh = float(b.get("Height", 0))
+
+                    # Intersect with the visible display boundaries so coordinates
+                    # never fall off the edge of the monitor (e.g. side-docked apps like ChatGPT)
+                    vis_x1 = max(0.0, wx)
+                    vis_y1 = max(0.0, wy)
+                    vis_x2 = min(screen_w, wx + ww)
+                    vis_y2 = min(screen_h, wy + wh)
+
+                    if vis_x2 > vis_x1 and vis_y2 > vis_y1:
+                        # Target the center of the visible area horizontally, and the upper 42%
+                        # vertically to land squarely in chat/document history and stay well above
+                        # bottom prompt input bars or toolbars.
+                        cx = vis_x1 + (vis_x2 - vis_x1) * 0.5
+                        cy = vis_y1 + (vis_y2 - vis_y1) * 0.42
+                        return (cx, cy)
     except Exception:
         pass
     return None
