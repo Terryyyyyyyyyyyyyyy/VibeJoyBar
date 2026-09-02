@@ -42,16 +42,40 @@ struct DashboardSidebar: View {
 
     private func stickRow(_ binding: StickBinding) -> some View {
         let selected = selection == .stick(binding.direction)
-        return Button { selection = .stick(binding.direction); showingStickEditor = false } label: {
+        return Button {
+            selection = .stick(binding.direction)
+            showingStickEditor = false
+        } label: {
             HStack(spacing: 8) {
-                Image(systemName: stickSymbol(binding.direction)).frame(width: 18)
-                Text(ActionSummary.text(for: binding.action)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(selected ? Color.accentColor : Color.clear)
+                    .frame(width: 3, height: 16)
+
+                Image(systemName: stickSymbol(binding.direction))
+                    .font(.system(size: 11, weight: selected ? .bold : .medium))
+                    .foregroundStyle(selected ? Color.accentColor : Color.primary)
+                    .frame(width: 18)
+
+                Text(ActionSummary.text(for: binding.action))
+                    .font(.caption)
+                    .foregroundStyle(selected ? Color.primary.opacity(0.85) : Color.secondary)
+                    .lineLimit(1)
+
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 9).padding(.vertical, 6)
-            .background(selected ? Color.accentColor.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 7))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                selected ? Color.accentColor.opacity(0.12) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(selected ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+            )
         }
-        .buttonStyle(.plain).foregroundStyle(selected ? Color.accentColor : Color.primary)
+        .buttonStyle(.plain)
     }
 
     private func stickSymbol(_ direction: String) -> String {
@@ -91,23 +115,40 @@ struct DashboardSidebar: View {
     private func mappingRow(_ button: String) -> some View {
         let item = model.configStore.bindings.first(where: { $0.button == button })
         let selected = selection == .button(button)
-        return Button { selection = .button(button); showingStickEditor = false } label: {
+        return Button {
+            selection = .button(button)
+            showingStickEditor = false
+        } label: {
             HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(selected ? Color.accentColor : Color.clear)
+                    .frame(width: 3, height: 16)
+
                 Text(item?.displayName ?? button.uppercased())
-                    .font(.body.weight(.semibold))
-                    .frame(width: 54, alignment: .leading)
+                    .font(.body.weight(selected ? .semibold : .medium))
+                    .foregroundStyle(selected ? Color.accentColor : Color.primary)
+                    .frame(width: 50, alignment: .leading)
+
                 Text(ActionSummary.text(for: item?.action ?? "none"))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(selected ? Color.primary.opacity(0.85) : Color.secondary)
                     .lineLimit(1)
+
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 9).padding(.vertical, 7)
-            .background(selected ? Color.accentColor.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 7))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                selected ? Color.accentColor.opacity(0.12) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(selected ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
-        .foregroundStyle(selected ? Color.accentColor : Color.primary)
         .accessibilityLabel("编辑 \(item?.displayName ?? button.uppercased())")
         .accessibilityValue(ActionSummary.text(for: item?.action ?? "none"))
     }

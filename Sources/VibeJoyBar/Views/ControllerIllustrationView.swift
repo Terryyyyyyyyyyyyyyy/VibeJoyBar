@@ -66,17 +66,45 @@ struct ControllerIllustrationView: View {
 
     private func shoulderCapsule(_ id: String, label: String) -> some View {
         let isSelected = selection == .button(id)
-        return Button { selection = .button(id) } label: {
+        let isHovered = hoveredHotspot == id
+        let isEmphasized = isSelected || isHovered
+
+        return Button {
+            selection = .button(id)
+        } label: {
             Text(label)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(isSelected ? Color.white : Color.secondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(
-                    isSelected ? Color.accentColor : Color.primary.opacity(0.08),
-                    in: Capsule()
+                .font(.system(size: 11, weight: isSelected ? .bold : .semibold, design: .rounded))
+                .foregroundStyle(isSelected ? Color.white : (isHovered ? Color.primary : Color.secondary))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 5)
+                .background {
+                    if isSelected {
+                        Capsule()
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.accentColor, Color.accentColor.opacity(0.85)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                            .shadow(color: Color.accentColor.opacity(0.35), radius: 4, y: 1.5)
+                    } else if isHovered {
+                        Capsule()
+                            .fill(Color.primary.opacity(0.10))
+                    } else {
+                        Capsule()
+                            .fill(Color.primary.opacity(0.06))
+                    }
+                }
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            isSelected ? Color.clear : (isHovered ? Color.accentColor.opacity(0.4) : Color.primary.opacity(0.12)),
+                            lineWidth: 1
+                        )
                 )
-                .overlay(Capsule().stroke(isSelected ? Color.clear : Color.primary.opacity(0.15), lineWidth: 1))
+                .scaleEffect(isEmphasized ? 1.04 : 1.0)
+                .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isEmphasized)
         }
         .buttonStyle(.plain)
         .onHover { isHovered in
@@ -89,16 +117,19 @@ struct ControllerIllustrationView: View {
     @ViewBuilder private var assetCanvas: some View {
         if mode == .front {
             controllerAsset(mode.assetName, aspect: 0.40) { size in
+                // Stick subtle compass backdrop disk for unified visual anchoring
+                stickCompassBackdrop(x: 0.64, y: 0.65, in: size)
+
                 faceHotspot("plus", x: 0.43, y: 0.20, in: size)
                 faceHotspot("x", x: 0.67, y: 0.29, in: size)
                 faceHotspot("y", x: 0.45, y: 0.38, in: size)
                 faceHotspot("a", x: 0.76, y: 0.38, in: size)
                 faceHotspot("b", x: 0.59, y: 0.47, in: size)
+                faceHotspot("r-stick", x: 0.64, y: 0.65, in: size)
                 stickDirectionHotspot("up", symbol: "arrow.up", x: 0.64, y: 0.56, in: size)
                 stickDirectionHotspot("left", symbol: "arrow.left", x: 0.53, y: 0.65, in: size)
                 stickDirectionHotspot("right", symbol: "arrow.right", x: 0.75, y: 0.65, in: size)
                 stickDirectionHotspot("down", symbol: "arrow.down", x: 0.64, y: 0.74, in: size)
-                faceHotspot("r-stick", x: 0.64, y: 0.65, in: size)
                 faceHotspot("home", x: 0.53, y: 0.82, in: size)
                 faceHotspot("sl", x: 0.13, y: 0.31, in: size)
                 faceHotspot("sr", x: 0.13, y: 0.80, in: size)
@@ -109,6 +140,37 @@ struct ControllerIllustrationView: View {
                 faceHotspot("r", x: 0.59, y: 0.52, in: size)
             }
         }
+    }
+
+    private func stickCompassBackdrop(x: CGFloat, y: CGFloat, in size: CGSize) -> some View {
+        let isStickActive = {
+            if case .stick = selection { return true }
+            if selection == .button("r-stick") { return true }
+            if let h = hoveredHotspot, ["up", "down", "left", "right", "r-stick"].contains(h) { return true }
+            return false
+        }()
+
+        return ZStack {
+            Circle()
+                .fill(.ultraThinMaterial.opacity(isStickActive ? 0.8 : 0.4))
+                .frame(width: 82, height: 82)
+                .overlay(
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: isStickActive
+                                    ? [Color.accentColor.opacity(0.35), Color.accentColor.opacity(0.12)]
+                                    : [Color.primary.opacity(0.12), Color.primary.opacity(0.04)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        }
+        .position(x: x * size.width, y: y * size.height)
+        .allowsHitTesting(false)
+        .animation(.easeInOut(duration: 0.2), value: isStickActive)
     }
 
     private func controllerAsset<Hotspots: View>(
@@ -165,15 +227,15 @@ struct ControllerIllustrationView: View {
         return .module
     }
 
-    // Hotspot shows only a ring on hover/selection — no text overlay on the image.
+    // Hotspot indicators shaped according to physical hardware with elegant glowing highlights.
     private func faceHotspot(_ id: String, x: CGFloat, y: CGFloat, in size: CGSize) -> some View {
         let emphasized = selection == .button(id) || hoveredHotspot == id || focusedHotspot == id
-        let diameter: CGFloat = id == "r-stick" ? 45 : 32
-        return Button { selection = .button(id) } label: {
-            Circle()
-                .fill(emphasized ? Color.accentColor.opacity(0.18) : Color.clear)
-                .overlay(Circle().stroke(emphasized ? Color.accentColor : Color.clear, lineWidth: emphasized ? 2.5 : 0))
-                .frame(width: diameter, height: diameter)
+        return Button {
+            selection = .button(id)
+        } label: {
+            hotspotShape(for: id, emphasized: emphasized)
+                .scaleEffect(emphasized ? 1.06 : 1.0)
+                .animation(.spring(response: 0.28, dampingFraction: 0.65), value: emphasized)
         }
         .buttonStyle(.plain)
         .position(x: x * size.width, y: y * size.height)
@@ -186,6 +248,154 @@ struct ControllerIllustrationView: View {
         .help("编辑 \(hotspotTitle(id)) 映射")
     }
 
+    @ViewBuilder
+    private func hotspotShape(for id: String, emphasized: Bool) -> some View {
+        switch id {
+        case "a", "b", "x", "y":
+            Circle()
+                .fill(emphasized ? Color.accentColor.opacity(0.22) : Color.accentColor.opacity(0.04))
+                .overlay(
+                    Circle()
+                        .stroke(
+                            LinearGradient(
+                                colors: emphasized
+                                    ? [Color.accentColor, Color.accentColor.opacity(0.6)]
+                                    : [Color.primary.opacity(0.22), Color.primary.opacity(0.08)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.5
+                        )
+                )
+                .shadow(color: emphasized ? Color.accentColor.opacity(0.45) : .clear, radius: 5)
+                .frame(width: 32, height: 32)
+
+        case "sl", "sr":
+            Capsule()
+                .fill(emphasized ? Color.accentColor.opacity(0.25) : Color.primary.opacity(0.06))
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            LinearGradient(
+                                colors: emphasized
+                                    ? [Color.accentColor, Color.accentColor.opacity(0.7)]
+                                    : [Color.primary.opacity(0.2), Color.primary.opacity(0.08)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 1.5
+                        )
+                )
+                .shadow(color: emphasized ? Color.accentColor.opacity(0.45) : .clear, radius: 4)
+                .frame(width: 14, height: 36)
+
+        case "plus":
+            RoundedRectangle(cornerRadius: 6)
+                .fill(emphasized ? Color.accentColor.opacity(0.24) : Color.primary.opacity(0.06))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(
+                            LinearGradient(
+                                colors: emphasized
+                                    ? [Color.accentColor, Color.accentColor.opacity(0.6)]
+                                    : [Color.primary.opacity(0.22), Color.primary.opacity(0.08)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.5
+                        )
+                )
+                .shadow(color: emphasized ? Color.accentColor.opacity(0.45) : .clear, radius: 4)
+                .frame(width: 24, height: 24)
+
+        case "home":
+            ZStack {
+                Circle()
+                    .stroke(
+                        emphasized ? Color.accentColor.opacity(0.45) : Color.primary.opacity(0.12),
+                        lineWidth: 1
+                    )
+                    .frame(width: 36, height: 36)
+
+                Circle()
+                    .fill(emphasized ? Color.accentColor.opacity(0.22) : Color.primary.opacity(0.05))
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: emphasized
+                                        ? [Color.accentColor, Color.accentColor.opacity(0.7)]
+                                        : [Color.primary.opacity(0.22), Color.primary.opacity(0.08)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                    )
+                    .frame(width: 28, height: 28)
+            }
+            .shadow(color: emphasized ? Color.accentColor.opacity(0.45) : .clear, radius: 5)
+
+        case "r-stick":
+            ZStack {
+                Circle()
+                    .fill(emphasized ? Color.accentColor.opacity(0.20) : Color.primary.opacity(0.04))
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: emphasized
+                                        ? [Color.accentColor, Color.accentColor.opacity(0.65)]
+                                        : [Color.primary.opacity(0.25), Color.primary.opacity(0.10)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                    )
+                    .frame(width: 46, height: 46)
+
+                Circle()
+                    .stroke(
+                        emphasized ? Color.accentColor.opacity(0.6) : Color.primary.opacity(0.16),
+                        style: StrokeStyle(lineWidth: 1, dash: [3, 2])
+                    )
+                    .frame(width: 26, height: 26)
+
+                Circle()
+                    .fill(emphasized ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.25))
+                    .frame(width: 5, height: 5)
+            }
+            .shadow(color: emphasized ? Color.accentColor.opacity(0.45) : .clear, radius: 5)
+
+        case "r", "zr":
+            Capsule()
+                .fill(emphasized ? Color.accentColor.opacity(0.24) : Color.primary.opacity(0.06))
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            LinearGradient(
+                                colors: emphasized
+                                    ? [Color.accentColor, Color.accentColor.opacity(0.7)]
+                                    : [Color.primary.opacity(0.22), Color.primary.opacity(0.08)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 1.5
+                        )
+                )
+                .shadow(color: emphasized ? Color.accentColor.opacity(0.45) : .clear, radius: 5)
+                .frame(width: 76, height: 34)
+
+        default:
+            Circle()
+                .fill(emphasized ? Color.accentColor.opacity(0.20) : Color.clear)
+                .overlay(Circle().stroke(emphasized ? Color.accentColor : Color.primary.opacity(0.2), lineWidth: 1.5))
+                .shadow(color: emphasized ? Color.accentColor.opacity(0.45) : .clear, radius: 5)
+                .frame(width: 32, height: 32)
+        }
+    }
+
     private var stickLegend: some View {
         Text("R 摇杆：↑ / ↓ 滚动当前对话约一页 · ← / → 切换对话；按住 ZR 时 ← / → 改为系统 App 切换")
             .font(.caption2)
@@ -195,16 +405,46 @@ struct ControllerIllustrationView: View {
     }
 
     private func stickDirectionHotspot(_ id: String, symbol: String, x: CGFloat, y: CGFloat, in size: CGSize) -> some View {
-        Button { selection = .stick(id) } label: {
-            Image(systemName: symbol)
-                .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(selection == .stick(id) ? Color.accentColor : Color.primary)
-                .frame(width: 24, height: 24)
-                .background(selection == .stick(id) ? Color.accentColor.opacity(0.24) : Color.primary.opacity(0.09), in: Circle())
-                .overlay(Circle().stroke(selection == .stick(id) ? Color.accentColor : Color.primary.opacity(0.28), lineWidth: selection == .stick(id) ? 2 : 1))
+        let isSelected = selection == .stick(id)
+        let isHovered = hoveredHotspot == id
+        let isFocused = focusedHotspot == id
+        let emphasized = isSelected || isHovered || isFocused
+
+        return Button {
+            selection = .stick(id)
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(emphasized ? Color.accentColor.opacity(0.25) : Color.primary.opacity(0.07))
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                LinearGradient(
+                                    colors: emphasized
+                                        ? [Color.accentColor, Color.accentColor.opacity(0.7)]
+                                        : [Color.primary.opacity(0.22), Color.primary.opacity(0.08)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: emphasized ? 1.5 : 1
+                            )
+                    )
+                    .frame(width: 24, height: 24)
+
+                Image(systemName: symbol)
+                    .font(.system(size: 10, weight: emphasized ? .bold : .semibold))
+                    .foregroundStyle(emphasized ? Color.accentColor : Color.secondary)
+            }
+            .shadow(color: emphasized ? Color.accentColor.opacity(0.55) : Color.clear, radius: 5)
+            .scaleEffect(emphasized ? 1.12 : 1.0)
+            .animation(.spring(response: 0.28, dampingFraction: 0.65), value: emphasized)
         }
         .buttonStyle(.plain)
         .position(x: x * size.width, y: y * size.height)
+        .onHover { isHovered in
+            if isHovered { hoveredHotspot = id } else if hoveredHotspot == id { hoveredHotspot = nil }
+        }
+        .focused($focusedHotspot, equals: id)
         .accessibilityLabel("R 摇杆 \(id == "up" ? "上" : id == "down" ? "下" : id == "left" ? "左" : "右")方向")
         .accessibilityHint("编辑此方向的 Codex 映射")
         .help("编辑 R 摇杆 \(id) 映射")

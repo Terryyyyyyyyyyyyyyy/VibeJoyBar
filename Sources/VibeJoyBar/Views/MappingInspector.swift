@@ -20,22 +20,29 @@ struct MappingInspector: View {
     }
 
     @ViewBuilder private func inspector(_ selected: MappingSelection) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text("控制检查器").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            Text(selected.label).font(.title2.weight(.semibold))
+        VStack(alignment: .leading, spacing: 4) {
+            Text("控制检查器").font(.caption.weight(.bold)).foregroundStyle(.tertiary).tracking(1)
+            Text(selected.label).font(.title2.weight(.bold))
             Text(purpose(for: selected)).font(.callout).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
 
-        GroupBox("当前动作") {
+        GroupBox {
             VStack(alignment: .leading, spacing: 8) {
-                Label(ActionSummary.text(for: model.configStore.action(for: selected)), systemImage: "command")
-                    .font(.body.weight(.medium))
+                HStack(spacing: 8) {
+                    Image(systemName: "command")
+                        .foregroundStyle(Color.accentColor)
+                    Text(ActionSummary.text(for: model.configStore.action(for: selected)))
+                        .font(.body.weight(.semibold))
+                }
                 if model.configStore.action(for: selected) == "none" {
                     Text("安全停用 · 不会发送输入").font(.caption).foregroundStyle(.secondary)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 2)
+        } label: {
+            Text("当前动作").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
         }
 
         VStack(alignment: .leading, spacing: 8) {
@@ -101,8 +108,10 @@ struct MappingInspector: View {
 
         HStack {
             Button("设为不执行") { model.configStore.setAction("none", for: selected) }
+                .buttonStyle(.bordered)
             Spacer()
             Button("恢复默认") { model.configStore.setAction(MappingDefaults.action(for: selected), for: selected) }
+                .buttonStyle(.bordered)
         }
         .font(.caption)
     }
