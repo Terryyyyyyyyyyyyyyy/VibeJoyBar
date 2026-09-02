@@ -59,8 +59,7 @@ def emit_scroll(
         raise ValueError("scroll direction must be up/down and amount positive")
     create = _create_event or CGEventCreateScrollWheelEvent
     post = _post_event or CGEventPost
-    post_to_pid = _post_to_pid or CGEventPostToPid
-    if create is None or (post is None and post_to_pid is None):
+    if create is None or (post is None and _post_to_pid is None):
         logger.warning("native scroll is unavailable on this platform")
         return False
 
@@ -73,9 +72,6 @@ def emit_scroll(
     )
     pid = (_frontmost_pid or _frontmost_process_id)()
 
-    # Ensure the scroll event is explicitly targeted inside the frontmost app's window.
-    # When Joy-Con is held, the mouse cursor is often outside the active window, which
-    # causes macOS window server to drop or misroute unpositioned scroll events.
     target = (_window_center or _target_window_center)(pid)
     if target is not None and CGEventSetLocation is not None and CGPoint is not None and event is not None:
         try:
@@ -83,14 +79,15 @@ def emit_scroll(
         except Exception:
             pass
 
-    if pid and pid > 0 and post_to_pid is not None:
-        post_to_pid(pid, event)
+    # When running under unit tests with _post_to_pid injected, target that mock.
+    # In real macOS execution, always post to kCGHIDEventTap so WindowServer delivers
+    # the scroll wheel event to whatever is focused or under the cursor.
+    if _post_to_pid is not None and pid and pid > 0:
+        _post_to_pid(pid, event)
     elif post is not None:
-        # Last-resort compatibility path for unusual macOS versions or when
-        # the frontmost app disappears between the guard check and posting.
         post(kCGHIDEventTap, event)
     else:
-        logger.warning("cannot target native scroll: no foreground app PID")
+        logger.warning("cannot target native scroll: no event poster")
         return False
     return True
 

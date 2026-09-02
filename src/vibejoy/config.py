@@ -327,8 +327,8 @@ def _validate_action_spec(
 
     if isinstance(action, DelayAction):
         errors.append(f"{label}: 'delay:' only makes sense inside a macro")
-    if isinstance(action, ScrollAction):
-        errors.append(f"{label}: 'scroll:' only makes sense inside a macro")
+    if isinstance(action, ScrollAction) and not allow_in_stick:
+        errors.append(f"{label}: 'scroll:' is only supported on sticks or inside a macro")
     if isinstance(action, TypeAction) and not allow_in_stick:
         # 'type' is allowed anywhere but it's generally a macro building-block.
         pass

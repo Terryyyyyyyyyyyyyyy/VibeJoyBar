@@ -80,6 +80,18 @@ class _MacroRepeatState:
 
 
 @dataclass(slots=True)
+class _ScrollRepeatState:
+    """Tracks continuous mouse wheel scrolling on a held stick."""
+
+    direction: str
+    amount: int
+    interval_s: float
+    last_fire: float
+    initial_delay_s: float = 0.20
+    first: bool = True
+
+
+@dataclass(slots=True)
 class _MapperState:
     """All mutable tracking state. Per-control keyed by stringified id."""
 
@@ -100,6 +112,8 @@ class _MapperState:
     stick_shell_held: dict[str, tuple[str, str]] = field(default_factory=dict)
     # stick-id -> repeat state for macro held down (e.g. continuous scrolling)
     stick_macro_repeat: dict[str, _MacroRepeatState] = field(default_factory=dict)
+    # stick-id -> repeat state for direct scroll on stick
+    stick_scroll_repeat: dict[str, _ScrollRepeatState] = field(default_factory=dict)
     app_switcher_active: bool = False
     app_switcher_button_id: str | None = None
     # Auto-repeat state for holding the stick while App Switcher is active
@@ -142,6 +156,7 @@ class Mapper:
         self._fire_sequence_repeats(now)
         self._fire_stick_repeats(now)
         self._fire_stick_macro_repeats(now)
+        self._fire_stick_scroll_repeats(now)
         self._fire_app_switcher_repeat(now)
 
     def release_all(self) -> None:
@@ -354,6 +369,15 @@ class Mapper:
             self._window.set_queries(action.apps)
             self._window.step()
 
+        elif isinstance(action, ScrollAction):
+            emit_scroll(action.direction, action.amount)
+            self._state.stick_scroll_repeat[stick_id] = _ScrollRepeatState(
+                direction=action.direction,
+                amount=action.amount,
+                interval_s=0.06,
+                last_fire=time.monotonic(),
+            )
+
         elif isinstance(action, MacroRef):
             self._run_macro(
                 action.name,
@@ -394,6 +418,7 @@ class Mapper:
             self._keyboard.release(key)
         self._state.stick_repeat.pop(stick_id, None)
         self._state.stick_macro_repeat.pop(stick_id, None)
+        self._state.stick_scroll_repeat.pop(stick_id, None)
         held = self._state.stick_shell_held.pop(stick_id, None)
         if held is not None and side is not None:
             cmd, direction = held
@@ -455,6 +480,15 @@ class Mapper:
                 repeat.first = False
                 repeat.last_fire = now
                 self._run_macro(repeat.macro_name, context_env=repeat.context_env)
+
+    def _fire_stick_scroll_repeats(self, now: float) -> None:
+        """Repeat native mouse wheel scrolling while stick is held."""
+        for repeat in list(self._state.stick_scroll_repeat.values()):
+            delay = repeat.initial_delay_s if repeat.first else repeat.interval_s
+            if now - repeat.last_fire >= delay:
+                repeat.first = False
+                repeat.last_fire = now
+                emit_scroll(repeat.direction, repeat.amount)
 
     # ---------- Macros ----------
 

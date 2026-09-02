@@ -475,3 +475,27 @@ class TestStickScrollAutoRepeat:
         mapper = Mapper(cfg, kbd, win)
         mapper.on_event(StickEvent(side="right", direction="left"))
         assert "right:stick" not in mapper._state.stick_macro_repeat
+
+    def test_direct_stick_scroll_arms_repeat_and_fires_on_poll(
+        self, kbd: FakeKeyboard, win: FakeWindow, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls: list[tuple[str, int]] = []
+        import vibejoy.mapper as mapper_mod
+
+        monkeypatch.setattr(mapper_mod, "emit_scroll", lambda direction, amount: calls.append((direction, amount)))
+        cfg = _config(right_stick={"up": "scroll:up@6"})
+        mapper = Mapper(cfg, kbd, win)
+
+        # Flick up — immediate first scroll
+        mapper.on_event(StickEvent(side="right", direction="up"))
+        assert calls == [("up", 6)]
+        assert "right:stick" in mapper._state.stick_scroll_repeat
+
+        # Advance past initial delay (0.20s) and poll
+        mapper._state.stick_scroll_repeat["right:stick"].last_fire -= 0.25
+        mapper.poll()
+        assert calls == [("up", 6), ("up", 6)]
+
+        # Center stick clears repeat
+        mapper.on_event(StickEvent(side="right", direction=None))
+        assert "right:stick" not in mapper._state.stick_scroll_repeat

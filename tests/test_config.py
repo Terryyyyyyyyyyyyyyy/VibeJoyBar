@@ -41,11 +41,16 @@ def test_example_codex_scroll_macros_are_native_gestures(example_config_file: Pa
     assert config.macros["codex_page_down"].steps == ("scroll:down@8",)
 
 
-def test_scroll_is_only_valid_inside_macros(tmp_path: Path) -> None:
-    path = tmp_path / "bad.toml"
-    path.write_text('[profile.right.stick]\nup = "scroll:up@8"\n', encoding="utf-8")
-    with pytest.raises(ConfigError, match="only makes sense inside a macro"):
-        load_config(path)
+def test_scroll_is_valid_on_sticks_and_invalid_on_buttons(tmp_path: Path) -> None:
+    path_ok = tmp_path / "ok.toml"
+    path_ok.write_text('[profile.right.stick]\nup = "scroll:up@8"\n', encoding="utf-8")
+    config = load_config(path_ok)
+    assert config.profiles["right"].stick["up"] == "scroll:up@8"
+
+    path_bad = tmp_path / "bad.toml"
+    path_bad.write_text('[profile.right.buttons]\na = "scroll:up@8"\n', encoding="utf-8")
+    with pytest.raises(ConfigError, match="only supported on sticks or inside a macro"):
+        load_config(path_bad)
 
 
 def test_missing_file(tmp_path: Path) -> None:
