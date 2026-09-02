@@ -352,3 +352,60 @@ class TestShellInMacro:
         assert shell_recorder.calls[0]["cmd"] == "say done"
         assert shell_recorder.calls[0]["env"]["VIBEJOY_EVENT"] == "macro"
         assert shell_recorder.calls[0]["env"]["VIBEJOY_BUTTON"] == "zr"
+
+
+class TestAppSwitcherAutoRepeat:
+    """Tests for the stick auto-repeat feature while App Switcher is active."""
+
+    def test_stick_held_right_arms_repeat_state(self, kbd: FakeKeyboard, win: FakeWindow) -> None:
+        """Flicking the stick right while ZR is held arms the auto-repeat."""
+        mapper = Mapper(_config({"zr": "app_switcher:system"}), kbd, win)
+        mapper.on_event(ButtonEvent(side="right", button="zr", pressed=True))
+        mapper.on_event(StickEvent(side="right", direction="right"))
+        assert mapper._state.app_switcher_repeat is not None
+        assert mapper._state.app_switcher_repeat_direction == "right"
+
+    def test_stick_held_right_auto_repeats_via_poll(self, kbd: FakeKeyboard, win: FakeWindow) -> None:
+        """poll() fires a second Tab when repeat timer expires."""
+        mapper = Mapper(_config({"zr": "app_switcher:system"}), kbd, win)
+        mapper.on_event(ButtonEvent(side="right", button="zr", pressed=True))
+        mapper.on_event(StickEvent(side="right", direction="right"))
+        tab_count_after_flick = sum(1 for ev, _ in kbd.events if ev == "modified_tap")
+        assert tab_count_after_flick >= 1
+        # Force the repeat timer to have expired
+        assert mapper._state.app_switcher_repeat is not None
+        mapper._state.app_switcher_repeat.last_fire -= 0.4
+        mapper.poll()
+        tab_count_after_poll = sum(1 for ev, _ in kbd.events if ev == "modified_tap")
+        assert tab_count_after_poll > tab_count_after_flick
+
+    def test_stick_center_clears_repeat(self, kbd: FakeKeyboard, win: FakeWindow) -> None:
+        """Returning stick to center clears the auto-repeat state."""
+        mapper = Mapper(_config({"zr": "app_switcher:system"}), kbd, win)
+        mapper.on_event(ButtonEvent(side="right", button="zr", pressed=True))
+        mapper.on_event(StickEvent(side="right", direction="right"))
+        assert mapper._state.app_switcher_repeat is not None
+        mapper.on_event(StickEvent(side="right", direction=None))
+        assert mapper._state.app_switcher_repeat is None
+
+    def test_zr_release_clears_repeat(self, kbd: FakeKeyboard, win: FakeWindow) -> None:
+        """Releasing ZR clears the auto-repeat state."""
+        mapper = Mapper(_config({"zr": "app_switcher:system"}), kbd, win)
+        mapper.on_event(ButtonEvent(side="right", button="zr", pressed=True))
+        mapper.on_event(StickEvent(side="right", direction="right"))
+        assert mapper._state.app_switcher_repeat is not None
+        mapper.on_event(ButtonEvent(side="right", button="zr", pressed=False))
+        assert mapper._state.app_switcher_repeat is None
+
+    def test_poll_does_not_fire_when_app_switcher_inactive(self, kbd: FakeKeyboard, win: FakeWindow) -> None:
+        """poll() is a no-op when App Switcher is not active."""
+        mapper = Mapper(_config({"zr": "app_switcher:system"}), kbd, win)
+        mapper.on_event(ButtonEvent(side="right", button="zr", pressed=True))
+        mapper.on_event(StickEvent(side="right", direction="right"))
+        mapper.on_event(ButtonEvent(side="right", button="zr", pressed=False))
+        # Manually set a stale repeat (simulates a race condition)
+        from vibejoy.mapper import _RepeatState  # type: ignore[attr-defined]
+        mapper._state.app_switcher_repeat = _RepeatState(key="right", interval_s=0.0, last_fire=0.0)
+        mapper.poll()
+        # Should have been cleared immediately since app_switcher_active is False
+        assert mapper._state.app_switcher_repeat is None

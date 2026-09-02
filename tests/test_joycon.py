@@ -216,3 +216,42 @@ def test_stick_rearms_for_independent_deflections(monkeypatch: pytest.MonkeyPatc
         monkeypatch,
     )
     assert directions == ["left", None, "right", None]
+
+
+def test_stick_low_magnitude_triggers_past_deadzone(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A flick just past the deadzone must trigger (engage threshold is now 0.05).
+
+    With deadzone=0.35 and half_range=100, raw=40 gives normalised magnitude 0.40.
+    Post-deadzone rescale: (0.40 - 0.35) / (1 - 0.35) ≈ 0.077 > _STICK_ENGAGE_MAGNITUDE (0.05).
+    """
+    raw = 40  # half_range=100 → normalised 0.40
+    directions = _stick_directions(
+        [(raw, 0), (raw, 0), (0, 0), (0, 0)], monkeypatch, deadzone=0.35
+    )
+    assert "right" in directions
+
+
+def test_stick_below_deadzone_never_triggers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A deflection inside the deadzone must produce no direction events."""
+    raw = 30  # normalised 0.30 < deadzone 0.35 → post-deadzone = 0.0
+    directions = _stick_directions(
+        [(raw, 0), (raw, 0), (0, 0), (0, 0)], monkeypatch, deadzone=0.35
+    )
+    assert directions == []
+
+
+def test_stick_release_threshold_allows_quick_rearm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The stick rearming after dropping below release threshold (0.08).
+
+    hi=45 → post-deadzone ≈ 0.154 (above engage=0.05).
+    lo=36 → post-deadzone ≈ 0.015 (below release=0.08) — unlocks the state machine.
+    Second push of hi should produce a second 'left' direction event.
+    """
+    hi, lo = 45, 36
+    directions = _stick_directions(
+        [(-hi, 0), (-hi, 0), (-lo, 0), (-lo, 0), (-hi, 0), (-hi, 0), (0, 0), (0, 0)],
+        monkeypatch,
+        deadzone=0.35,
+    )
+    assert directions.count("left") == 2
+    assert directions.count(None) >= 1

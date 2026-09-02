@@ -45,6 +45,12 @@ from .window import WindowSwitcher
 
 logger = logging.getLogger(__name__)
 
+# App Switcher stick auto-repeat timing.
+_APP_SWITCHER_FIRST_MS: int = 350
+"""Delay before the first auto-repeat fires when the stick is held during App Switcher."""
+_APP_SWITCHER_REPEAT_MS: int = 200
+"""Interval between subsequent auto-repeat taps."""
+
 
 @dataclass(slots=True)
 class _RepeatState:
@@ -82,6 +88,10 @@ class _MapperState:
     stick_shell_held: dict[str, tuple[str, str]] = field(default_factory=dict)
     app_switcher_active: bool = False
     app_switcher_button_id: str | None = None
+    # Auto-repeat state for holding the stick while App Switcher is active
+    app_switcher_repeat: _RepeatState | None = None
+    app_switcher_repeat_direction: str | None = None
+    app_switcher_repeat_first: bool = True
 
 
 class Mapper:
@@ -117,6 +127,7 @@ class Mapper:
         self._promote_auto_holds(now)
         self._fire_sequence_repeats(now)
         self._fire_stick_repeats(now)
+        self._fire_app_switcher_repeat(now)
 
     def release_all(self) -> None:
         """Release every held key and clear all tracked state."""
@@ -267,13 +278,27 @@ class Mapper:
         # with it, including on the center transition.
         if event.side == "right" and self._state.app_switcher_active:
             self._release_stick(stick_id, side=event.side)
-            if event.direction == "right":
-                self._keyboard.tap_with_modifiers("tab", ("cmd",))
-            elif event.direction == "left":
-                # Cmd is already held by ZR. Include both flags on Tab;
-                # KeyboardOutput.combo would temporarily release Cmd and
-                # commit the switcher selection.
-                self._keyboard.tap_with_modifiers("tab", ("cmd", "shift"))
+            if event.direction in ("right", "left"):
+                # Emit the first Tab immediately.
+                if event.direction == "right":
+                    self._keyboard.tap_with_modifiers("tab", ("cmd",))
+                else:
+                    # Cmd is already held by ZR. Include both flags on Tab;
+                    # KeyboardOutput.combo would temporarily release Cmd and
+                    # commit the switcher selection.
+                    self._keyboard.tap_with_modifiers("tab", ("cmd", "shift"))
+                # Arm auto-repeat for as long as the stick stays in this direction.
+                self._state.app_switcher_repeat = _RepeatState(
+                    key=event.direction,
+                    interval_s=_APP_SWITCHER_FIRST_MS / 1000.0,
+                    last_fire=time.monotonic(),
+                )
+                self._state.app_switcher_repeat_direction = event.direction
+                self._state.app_switcher_repeat_first = True
+            else:
+                # Stick returned to center or moved vertically — stop repeat.
+                self._state.app_switcher_repeat = None
+                self._state.app_switcher_repeat_direction = None
             return
 
         # Always release previous stick hold/repeat/shell before considering the new direction.
@@ -364,12 +389,36 @@ class Mapper:
         self._keyboard.release("cmd")
         self._state.app_switcher_active = False
         self._state.app_switcher_button_id = None
+        self._state.app_switcher_repeat = None
+        self._state.app_switcher_repeat_direction = None
 
     def _fire_stick_repeats(self, now: float) -> None:
         for repeat in self._state.stick_repeat.values():
             if now - repeat.last_fire >= repeat.interval_s:
                 self._keyboard.tap(repeat.key)
                 repeat.last_fire = now
+
+    def _fire_app_switcher_repeat(self, now: float) -> None:
+        """Auto-advance the app switcher while the right stick is held in a direction."""
+        repeat = self._state.app_switcher_repeat
+        if repeat is None or not self._state.app_switcher_active:
+            self._state.app_switcher_repeat = None
+            return
+        if now - repeat.last_fire < repeat.interval_s:
+            return
+        direction = self._state.app_switcher_repeat_direction
+        if direction == "right":
+            self._keyboard.tap_with_modifiers("tab", ("cmd",))
+        elif direction == "left":
+            self._keyboard.tap_with_modifiers("tab", ("cmd", "shift"))
+        else:
+            self._state.app_switcher_repeat = None
+            return
+        # Switch to the faster repeat interval after the first auto-fire.
+        if self._state.app_switcher_repeat_first:
+            repeat.interval_s = _APP_SWITCHER_REPEAT_MS / 1000.0
+            self._state.app_switcher_repeat_first = False
+        repeat.last_fire = now
 
     # ---------- Macros ----------
 

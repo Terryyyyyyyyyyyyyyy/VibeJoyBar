@@ -44,10 +44,12 @@ Prevents flicker when the stick crosses zero on fast flicks."""
 _STICK_CANDIDATE_FRAMES: int = 2
 """Stable frames required before a direction is considered a deliberate flick."""
 
-_STICK_ENGAGE_MAGNITUDE: float = 0.30
-"""Minimum post-deadzone magnitude for a direction candidate."""
+_STICK_ENGAGE_MAGNITUDE: float = 0.05
+"""Minimum post-deadzone magnitude for a direction candidate.
+Kept deliberately low (0.05) so any deflection past the deadzone immediately
+enters candidacy — the two-frame confirmation window handles noise."""
 
-_STICK_RELEASE_MAGNITUDE: float = 0.12
+_STICK_RELEASE_MAGNITUDE: float = 0.08
 """Magnitude at or below which a locked direction is considered centered."""
 
 _DEFAULT_CALIBRATION_SAMPLES: int = 20
@@ -368,7 +370,7 @@ def apply_circular_deadzone(x: float, y: float, deadzone: float) -> tuple[float,
 
 def quantize_direction(x: float, y: float, mode: StickMode) -> Direction | None:
     """Return the quantized stick direction, or ``None`` if centered."""
-    if math.hypot(x, y) < 0.1:
+    if math.hypot(x, y) < 0.04:
         return None
     angle = math.degrees(math.atan2(y, x))
     if mode == "4dir":
