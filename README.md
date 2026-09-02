@@ -281,6 +281,16 @@ uv run vibejoy doctor     # sanity check
 - Rumble byte presets are derived from published reverse-engineering docs. They vibrate reliably but the exact tone isn't Nintendo-accurate — use raw bytes if you need a specific frequency.
 - macOS sleeps Bluetooth Joy-Cons after ~30 min idle. Press any button to wake.
 
+## 致谢与致敬 (Acknowledgments & Credits)
+
+本项目在开发演进过程中，深深受益于开源社区的优秀探索与开拓，特向以下两位作者及其项目致以最诚挚的敬意与感谢：
+
+1. **[vibejoy](https://github.com/WEIFENG2333/vibejoy)** by **[@WEIFENG2333](https://github.com/WEIFENG2333)** (liangweifeng):
+   - 建立了极具 Unix 哲学的美妙核心架构——基于 macOS 原生 HID 通信驱动、优雅且适合人类与 AI 共同协作的 TOML DSL 配置系统，以及轻量高效的 Unix Domain Socket IPC 进程间通信通道。没有他的开拓，就没有本项目坚如磐石的系统底层。
+
+2. **[JoyType](https://github.com/0xDarcyJ/JoyType)** by **[@0xDarcyJ](https://github.com/0xDarcyJ)** (DarcyJ & contributors):
+   - 开创了将 Nintendo Switch Joy-Con 打造为现代桌面生产力、AI 辅助编程与语音输入的典范，并在项目中提供了极其精致优雅的 Joy-Con 控制器原画设计（MIT 授权）。本项目视觉界面中精美的控制器图层素材与交互设计均深深启发自该项目。
+
 ## License
 
 MIT
