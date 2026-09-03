@@ -164,6 +164,18 @@ class Mapper:
         self._keyboard.release_all()
         self._state = _MapperState()
 
+    def reload_config(self, new_config: Config) -> None:
+        """Atomically hot-reload configuration in-memory.
+
+        Releases all currently held keys/macros to prevent stuck state,
+        updates config references and long press threshold, and recompiles
+        action tables.
+        """
+        self.release_all()
+        self._config = new_config
+        self._long_press_s = new_config.global_.long_press_ms / 1000.0
+        self._precompiled = self._precompile(new_config)
+
     # ---------- Button handling ----------
 
     def _on_button(self, event: ButtonEvent) -> None:

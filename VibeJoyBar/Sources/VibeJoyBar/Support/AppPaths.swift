@@ -10,6 +10,13 @@ enum AppPaths {
     static let defaultProjectPath = "/Users/terry/Library/CloudStorage/SynologyDrive-Home/Data/Codex/VibeJoy/vibejoy"
     static let defaultConfigPath = FileManager.default.homeDirectoryForCurrentUser
         .appendingPathComponent(".config/vibejoy/config.toml").path
+    static let profilesDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".config/vibejoy/profiles")
+    static let defaultProfileURL = profilesDirectoryURL.appendingPathComponent("default.toml")
+    static let activeProfileURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".config/vibejoy/active_profile")
+    static let backupsDirectoryURL = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".config/vibejoy/backups")
     static let defaultUVPath = "/opt/homebrew/bin/uv"
 
     static func expandedURL(_ path: String) -> URL {

@@ -141,6 +141,28 @@ class JoyConReader:
             return None
         return max(0.0, self._clock() - self._last_report_change_at)
 
+    @property
+    def deadzone(self) -> float:
+        """Stick deadzone threshold [0, 1)."""
+        return self._deadzone
+
+    @deadzone.setter
+    def deadzone(self, value: float) -> None:
+        if not 0.0 <= value < 1.0:
+            raise ValueError(f"deadzone must be in [0, 1), got {value}")
+        self._deadzone = value
+
+    @property
+    def stick_mode(self) -> StickMode:
+        """Directional mapping mode ('4dir' or '8dir')."""
+        return self._stick_mode
+
+    @stick_mode.setter
+    def stick_mode(self, value: StickMode) -> None:
+        if value not in ("4dir", "8dir"):
+            raise ValueError(f"stick_mode must be '4dir' or '8dir', got {value!r}")
+        self._stick_mode = value
+
     def calibrate(
         self,
         *,

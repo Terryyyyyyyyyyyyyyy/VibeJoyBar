@@ -23,8 +23,10 @@ get immediate feedback on typos.
 from __future__ import annotations
 
 import os
+import re
 import tomllib
 from dataclasses import dataclass, field
+from datetime import datetime
 from importlib import resources
 from pathlib import Path
 from typing import Any, Literal
@@ -46,6 +48,11 @@ StickMode = Literal["4dir", "8dir"]
 DEFAULT_CONFIG_FILENAME = "config.toml"
 ENV_CONFIG_PATH = "VIBEJOY_CONFIG"
 EXAMPLE_CONFIG_RESOURCE = "config.example.toml"
+DEFAULT_PROFILES_DIR_NAME = "profiles"
+DEFAULT_PROFILE_FILENAME = "default.toml"
+ACTIVE_PROFILE_FILENAME = "active_profile"
+DEFAULT_BACKUPS_DIR_NAME = "backups"
+DEFAULT_PROFILE_RESOURCE = "profiles/default.toml"
 
 
 class ConfigError(ValueError):
@@ -95,6 +102,16 @@ def default_config_path() -> Path:
     """Return the platform default, even if the file doesn't exist."""
     xdg = os.environ.get("XDG_CONFIG_HOME") or str(Path.home() / ".config")
     return Path(xdg) / "vibejoy" / DEFAULT_CONFIG_FILENAME
+
+
+def default_profiles_dir() -> Path:
+    """Return the user profiles directory ($XDG_CONFIG_HOME/vibejoy/profiles)."""
+    return default_config_path().parent / DEFAULT_PROFILES_DIR_NAME
+
+
+def default_backups_dir() -> Path:
+    """Return the configuration backups directory ($XDG_CONFIG_HOME/vibejoy/backups)."""
+    return default_config_path().parent / DEFAULT_BACKUPS_DIR_NAME
 
 
 def resolve_config_path(explicit: str | Path | None) -> Path:
@@ -175,6 +192,192 @@ def read_example_config() -> str:
         # Fallback — when running from a source checkout without the file packaged.
         here = Path(__file__).resolve().parent
         return (here / EXAMPLE_CONFIG_RESOURCE).read_text("utf-8")
+
+
+def read_default_profile() -> str:
+    """Return the bundled default profile (profiles/default.toml) as text.
+
+    Falls back to `read_example_config()` if not found.
+    """
+    try:
+        return resources.files("vibejoy").joinpath(DEFAULT_PROFILE_RESOURCE).read_text("utf-8")
+    except (FileNotFoundError, ModuleNotFoundError, TypeError):
+        here = Path(__file__).resolve().parent
+        profile_path = here / DEFAULT_PROFILES_DIR_NAME / DEFAULT_PROFILE_FILENAME
+        if profile_path.is_file():
+            return profile_path.read_text("utf-8")
+        return read_example_config()
+
+
+def ensure_profiles_initialized() -> Path:
+    """Ensure the user profiles directory and default.toml exist.
+
+    Creates ~/.config/vibejoy/profiles/default.toml if missing.
+    Returns the Path to default.toml.
+    """
+    pdir = default_profiles_dir()
+    pdir.mkdir(parents=True, exist_ok=True)
+    default_file = pdir / DEFAULT_PROFILE_FILENAME
+    if not default_file.exists():
+        default_file.write_text(read_default_profile(), encoding="utf-8")
+    return default_file
+
+
+def backup_config(target_path: Path | None = None) -> Path:
+    """Back up the specified (or resolved active) config file.
+
+    Saves to ~/.config/vibejoy/backups/config.<timestamp>.bak.toml.
+    Returns the path of the created backup file.
+    """
+    src = target_path if target_path is not None else resolve_config_path(None)
+    backups_dir = default_backups_dir()
+    backups_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_file = backups_dir / f"config.{timestamp}.bak.toml"
+    if backup_file.exists():
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        backup_file = backups_dir / f"config.{timestamp}.bak.toml"
+
+    content = src.read_text(encoding="utf-8") if src.is_file() else read_default_profile()
+    backup_file.write_text(content, encoding="utf-8")
+    return backup_file
+
+
+def validate_profile_name(name: str) -> str:
+    """Validate and normalize a profile name.
+
+    Disallows empty names, leading dots, path separators, traversal characters,
+    or characters outside unicode letters/digits/underscores/hyphens.
+    Raises ConfigError on invalid input.
+    """
+    cleaned = name.strip()
+    if not cleaned:
+        raise ConfigError(f"invalid profile name: '{name}'")
+    if cleaned.startswith(".") or "/" in cleaned or "\\" in cleaned or ".." in cleaned:
+        raise ConfigError(f"invalid profile name: '{name}'")
+    if not re.match(r"^[\w\-]+$", cleaned, re.UNICODE):
+        raise ConfigError(f"invalid profile name: '{name}'")
+    return cleaned
+
+
+def active_profile_path() -> Path:
+    """Return the path to the active_profile marker file."""
+    return default_config_path().parent / ACTIVE_PROFILE_FILENAME
+
+
+def get_active_profile() -> str:
+    """Return the name of the active profile (defaults to 'default')."""
+    p = active_profile_path()
+    if not p.is_file():
+        return "default"
+    try:
+        content = p.read_text(encoding="utf-8").strip()
+        if not content:
+            return "default"
+        return validate_profile_name(content)
+    except (ConfigError, OSError):
+        return "default"
+
+
+def set_active_profile(name: str) -> None:
+    """Set the active profile name in the marker file."""
+    valid_name = validate_profile_name(name)
+    p = active_profile_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(valid_name, encoding="utf-8")
+
+
+def list_profiles() -> list[dict[str, Any]]:
+    """Scan and list available profiles with metadata."""
+    ensure_profiles_initialized()
+    pdir = default_profiles_dir()
+    active_name = get_active_profile()
+    profiles: list[dict[str, Any]] = []
+    for p in pdir.glob("*.toml"):
+        name = p.stem
+        profiles.append(
+            {
+                "name": name,
+                "path": p,
+                "is_default": name == "default",
+                "is_active": name == active_name,
+            }
+        )
+    profiles.sort(key=lambda item: (0 if item["is_default"] else 1, item["name"].lower()))
+    return profiles
+
+
+def create_profile(
+    name: str,
+    from_profile: str | None = None,
+    content: str | None = None,
+) -> Path:
+    """Create a new profile file in the profiles directory."""
+    valid_name = validate_profile_name(name)
+    ensure_profiles_initialized()
+    target = default_profiles_dir() / f"{valid_name}.toml"
+    if target.is_file():
+        raise ConfigError(f"profile '{valid_name}' already exists: {target}")
+
+    if content is not None:
+        text = content
+    elif from_profile is not None:
+        from_name = validate_profile_name(from_profile)
+        src_file = default_profiles_dir() / f"{from_name}.toml"
+        if not src_file.is_file():
+            raise ConfigError(f"source profile '{from_profile}' not found: {src_file}")
+        text = src_file.read_text(encoding="utf-8")
+    else:
+        active_cfg = resolve_config_path(None)
+        text = active_cfg.read_text(encoding="utf-8") if active_cfg.is_file() else read_default_profile()
+
+    try:
+        raw = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        raise ConfigError(f"invalid TOML content for profile '{valid_name}': {e}") from e
+
+    cfg = _build_config(raw, source_path=target)
+    errors = validate_config(cfg)
+    if errors:
+        formatted = "\n".join(f"  - {e}" for e in errors)
+        raise ConfigError(f"profile '{valid_name}' has errors:\n{formatted}")
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8")
+    return target
+
+
+def switch_profile(name: str) -> Path:
+    """Switch active config to the named profile, creating a backup first."""
+    valid_name = validate_profile_name(name)
+    ensure_profiles_initialized()
+    target = default_profiles_dir() / f"{valid_name}.toml"
+    if not target.is_file():
+        raise ConfigError(f"profile '{valid_name}' not found: {target}")
+
+    load_config(target)  # Validates target profile syntax & schema
+
+    active_cfg = resolve_config_path(None)
+    backup_config(active_cfg)
+    active_cfg.parent.mkdir(parents=True, exist_ok=True)
+    active_cfg.write_text(target.read_text(encoding="utf-8"), encoding="utf-8")
+    set_active_profile(valid_name)
+    return target
+
+
+def delete_profile(name: str) -> None:
+    """Delete a custom profile. Cannot delete the factory default profile."""
+    valid_name = validate_profile_name(name)
+    if valid_name == "default":
+        raise ConfigError("cannot delete factory default profile 'default'")
+    target = default_profiles_dir() / f"{valid_name}.toml"
+    if not target.is_file():
+        raise ConfigError(f"profile '{valid_name}' not found: {target}")
+    if get_active_profile() == valid_name:
+        switch_profile("default")
+    target.unlink()
+
 
 
 # ---------- Construction ----------

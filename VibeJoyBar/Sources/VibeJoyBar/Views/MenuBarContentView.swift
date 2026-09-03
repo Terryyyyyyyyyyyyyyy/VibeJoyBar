@@ -30,6 +30,20 @@ struct MenuBarContentView: View {
             activateAndOpen(id: "mapper")
         }
 
+        Menu("方案预设 (\(model.configStore.activeProfileName))") {
+            ForEach(model.configStore.availableProfiles) { profile in
+                Button {
+                    model.switchToProfile(named: profile.name)
+                } label: {
+                    if profile.isActive {
+                        Label(profile.name + (profile.isDefault ? " (出厂基准)" : ""), systemImage: "checkmark")
+                    } else {
+                        Text(profile.name + (profile.isDefault ? " (出厂基准)" : ""))
+                    }
+                }
+            }
+        }
+
         Button("查看日志…") {
             activateAndOpen(id: "logs")
         }

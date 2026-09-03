@@ -176,3 +176,12 @@ struct CommandResult: Sendable {
     let exitCode: Int32
     let output: String
 }
+
+struct ProfileItem: Identifiable, Hashable, Equatable, Sendable {
+    let name: String
+    let isDefault: Bool
+    let isActive: Bool
+    let fileURL: URL
+
+    var id: String { name }
+}

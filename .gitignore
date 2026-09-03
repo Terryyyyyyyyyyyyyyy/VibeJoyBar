@@ -30,3 +30,5 @@ DerivedData/
 *.sock
 .git_standalone/
 *.git_standalone
+*.zip
+xhs_release_0.9/

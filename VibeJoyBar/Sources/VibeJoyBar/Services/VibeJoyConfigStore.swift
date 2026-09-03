@@ -24,6 +24,8 @@ final class VibeJoyConfigStore {
     private(set) var deadzone: Double = 0.35
     private(set) var sourceText = ""
     private(set) var hasUnsavedChanges = false
+    private(set) var activeProfileName: String = "default"
+    private(set) var availableProfiles: [ProfileItem] = []
     var errorMessage: String?
     var configURL: URL
 
@@ -52,6 +54,46 @@ final class VibeJoyConfigStore {
             stickBindings = Self.knownStickDirections.map { StickBinding(direction: $0, action: "none") }
             errorMessage = "无法读取配置：\(error.localizedDescription)"
         }
+        refreshProfiles()
+    }
+
+    func refreshProfiles() {
+        let fileManager = FileManager.default
+        let baseDir = configURL.deletingLastPathComponent()
+        let activeProfileFile = baseDir.appendingPathComponent("active_profile")
+        var currentActive = "default"
+        if fileManager.fileExists(atPath: activeProfileFile.path),
+           let content = try? String(contentsOf: activeProfileFile, encoding: .utf8) {
+            let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty && !trimmed.contains("/") && !trimmed.contains("\\") && !trimmed.contains("..") && !trimmed.hasPrefix(".") {
+                currentActive = trimmed
+            }
+        }
+
+        let profilesDir = baseDir.appendingPathComponent("profiles")
+        var items: [ProfileItem] = []
+        if let urls = try? fileManager.contentsOfDirectory(at: profilesDir, includingPropertiesForKeys: nil) {
+            for url in urls where url.pathExtension == "toml" {
+                let name = url.deletingPathExtension().lastPathComponent
+                let isDefault = (name == "default")
+                let isActive = (name == currentActive)
+                items.append(ProfileItem(name: name, isDefault: isDefault, isActive: isActive, fileURL: url))
+            }
+        }
+
+        if !items.contains(where: { $0.name == "default" }) {
+            let defaultURL = profilesDir.appendingPathComponent("default.toml")
+            items.append(ProfileItem(name: "default", isDefault: true, isActive: currentActive == "default", fileURL: defaultURL))
+        }
+
+        items.sort { a, b in
+            if a.name == "default" { return true }
+            if b.name == "default" { return false }
+            return a.name.localizedStandardCompare(b.name) == .orderedAscending
+        }
+
+        availableProfiles = items
+        activeProfileName = currentActive
     }
 
     func setAction(_ action: String, at index: Int) { guard bindings.indices.contains(index) else { return }; bindings[index].action = action; hasUnsavedChanges = true }
@@ -83,10 +125,239 @@ final class VibeJoyConfigStore {
     }
 
     func commit(_ text: String) throws {
-        try FileManager.default.createDirectory(at: configURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let fileManager = FileManager.default
+        let baseDir = configURL.deletingLastPathComponent()
+        try fileManager.createDirectory(at: baseDir, withIntermediateDirectories: true)
         try text.write(to: configURL, atomically: true, encoding: .utf8)
+
+        if activeProfileName != "default" {
+            let profilesDir = baseDir.appendingPathComponent("profiles")
+            try fileManager.createDirectory(at: profilesDir, withIntermediateDirectories: true)
+            let profileURL = profilesDir.appendingPathComponent("\(activeProfileName).toml")
+            try text.write(to: profileURL, atomically: true, encoding: .utf8)
+        }
+
         sourceText = text; hasUnsavedChanges = false; errorMessage = nil
+        refreshProfiles()
     }
+
+    private func createBackupOfCurrentConfig() throws {
+        let fileManager = FileManager.default
+        let existingContent: String?
+        if fileManager.fileExists(atPath: configURL.path),
+           let text = try? String(contentsOf: configURL, encoding: .utf8),
+           !text.isEmpty {
+            existingContent = text
+        } else if !sourceText.isEmpty {
+            existingContent = sourceText
+        } else {
+            existingContent = nil
+        }
+
+        if let content = existingContent {
+            let backupsDir = configURL.deletingLastPathComponent().appendingPathComponent("backups")
+            try fileManager.createDirectory(at: backupsDir, withIntermediateDirectories: true)
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyyMMdd_HHmmss"
+            var backupURL = backupsDir.appendingPathComponent("config.\(formatter.string(from: Date())).bak.toml")
+            if fileManager.fileExists(atPath: backupURL.path) {
+                formatter.dateFormat = "yyyyMMdd_HHmmss_SSS"
+                backupURL = backupsDir.appendingPathComponent("config.\(formatter.string(from: Date())).bak.toml")
+            }
+            try content.write(to: backupURL, atomically: true, encoding: .utf8)
+        }
+    }
+
+    func saveAsNewProfile(named rawName: String) throws {
+        let cleanName = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty,
+              !cleanName.hasPrefix("."),
+              !cleanName.contains("/"),
+              !cleanName.contains("\\"),
+              !cleanName.contains("..") else {
+            throw VibeJoyConfigError.unreadable("无效的方案名称：'\(rawName)'")
+        }
+
+        let fileManager = FileManager.default
+        let baseDir = configURL.deletingLastPathComponent()
+        let profilesDir = baseDir.appendingPathComponent("profiles")
+        try fileManager.createDirectory(at: profilesDir, withIntermediateDirectories: true)
+
+        let targetURL = profilesDir.appendingPathComponent("\(cleanName).toml")
+        let text = try renderedText()
+        try text.write(to: targetURL, atomically: true, encoding: .utf8)
+
+        let activeProfileURL = baseDir.appendingPathComponent("active_profile")
+        try cleanName.write(to: activeProfileURL, atomically: true, encoding: .utf8)
+
+        try text.write(to: configURL, atomically: true, encoding: .utf8)
+        activeProfileName = cleanName
+        load()
+    }
+
+    func switchToProfile(named name: String) throws {
+        let fileManager = FileManager.default
+        let baseDir = configURL.deletingLastPathComponent()
+        let profilesDir = baseDir.appendingPathComponent("profiles")
+        let targetURL = profilesDir.appendingPathComponent("\(name).toml")
+
+        let targetText: String
+        if fileManager.fileExists(atPath: targetURL.path) {
+            targetText = try String(contentsOf: targetURL, encoding: .utf8)
+        } else if name == "default" {
+            if fileManager.fileExists(atPath: AppPaths.defaultProfileURL.path),
+               let text = try? String(contentsOf: AppPaths.defaultProfileURL, encoding: .utf8),
+               !text.isEmpty {
+                targetText = text
+            } else {
+                targetText = Self.fallbackDefaultConfig
+            }
+            try fileManager.createDirectory(at: profilesDir, withIntermediateDirectories: true)
+            try targetText.write(to: targetURL, atomically: true, encoding: .utf8)
+        } else {
+            throw VibeJoyConfigError.unreadable("方案不存在：\(name)")
+        }
+
+        try createBackupOfCurrentConfig()
+
+        try fileManager.createDirectory(at: baseDir, withIntermediateDirectories: true)
+        try targetText.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let activeProfileURL = baseDir.appendingPathComponent("active_profile")
+        try name.write(to: activeProfileURL, atomically: true, encoding: .utf8)
+
+        activeProfileName = name
+        load()
+    }
+
+    func deleteProfile(named name: String) throws {
+        if name == "default" {
+            throw VibeJoyConfigError.unreadable("出厂基准方案不可删除")
+        }
+        let fileManager = FileManager.default
+        let baseDir = configURL.deletingLastPathComponent()
+        let profilesDir = baseDir.appendingPathComponent("profiles")
+        let targetURL = profilesDir.appendingPathComponent("\(name).toml")
+
+        guard fileManager.fileExists(atPath: targetURL.path) else {
+            throw VibeJoyConfigError.unreadable("方案不存在：\(name)")
+        }
+
+        if activeProfileName == name {
+            try switchToProfile(named: "default")
+        }
+
+        if fileManager.fileExists(atPath: targetURL.path) {
+            try fileManager.removeItem(at: targetURL)
+        }
+        refreshProfiles()
+    }
+
+    func resetToDefaultProfile(createBackup: Bool = true) throws {
+        let fileManager = FileManager.default
+        if createBackup {
+            try createBackupOfCurrentConfig()
+        }
+
+        let baseDir = configURL.deletingLastPathComponent()
+        let defaultProfileURL = baseDir.appendingPathComponent("profiles/default.toml")
+        let defaultContent: String
+        if fileManager.fileExists(atPath: defaultProfileURL.path),
+           let text = try? String(contentsOf: defaultProfileURL, encoding: .utf8),
+           !text.isEmpty {
+            defaultContent = text
+        } else if fileManager.fileExists(atPath: AppPaths.defaultProfileURL.path),
+                  let text = try? String(contentsOf: AppPaths.defaultProfileURL, encoding: .utf8),
+                  !text.isEmpty {
+            defaultContent = text
+        } else {
+            defaultContent = Self.fallbackDefaultConfig
+        }
+
+        let activeProfileURL = baseDir.appendingPathComponent("active_profile")
+        try? "default".write(to: activeProfileURL, atomically: true, encoding: .utf8)
+        activeProfileName = "default"
+
+        try commit(defaultContent)
+        load()
+    }
+
+    static let fallbackDefaultConfig = """
+    # VibeJoy — Joy-Con → macOS keyboard mapping.
+    # Default Profile (出厂基准方案 v0.9.0)
+
+    [global]
+    deadzone       = 0.2    # stick radial deadzone, 0..1
+    poll_hz        = 100    # polling frequency
+    long_press_ms  = 250    # auto:<key>'s short-vs-long threshold
+    stick_mode     = "4dir" # "4dir" or "8dir"
+
+    # ─────────── Right Joy-Con ───────────
+
+    [profile.right.buttons]
+    a       = "tap:enter"
+    b       = "tap:escape"
+    x       = "combo:option+0"
+    y       = "combo:option+1"
+    r       = "combo:option+2"           # Type4Me Prompt 优化; not app-switch mode
+    zr      = "app_switcher:system"     # hold for Cmd+Tab; right stick navigates
+    plus    = "combo:cmd+s"
+    home    = "window_switch:com.openai.codex" # ChatGPT app bundle (Codex)
+    "r-stick" = "none"
+    sl      = "none"
+    sr      = "none"
+
+    [profile.right.stick]
+    up      = "macro:codex_page_up"          # one page up in the current Codex chat
+    down    = "macro:codex_page_down"        # one page down in the current Codex chat
+    left    = "macro:codex_previous_thread"  # previous Codex chat; ZR still overrides this
+    right   = "macro:codex_next_thread"      # next Codex chat; ZR still overrides this
+
+    # ─────────── Left Joy-Con (only used if paired) ───────────
+
+    [profile.left.buttons]
+    a       = "tap:enter"
+    b       = "tap:escape"
+    l       = "combo:cmd+tab"
+    zl      = "hold:cmd"
+    minus   = "combo:cmd+z"
+    capture = "combo:cmd+shift+3"           # macOS screenshot
+    "l-stick" = "tap:tab"
+
+    [profile.left.stick]
+    up      = "none"
+    down    = "none"
+    left    = "none"
+    right   = "none"
+
+    # ─────────── Macros ───────────
+
+    [macro.codex_page_up]
+    if_app  = "com.openai.codex"
+    steps   = ["scroll:up@8"]
+
+    [macro.codex_page_down]
+    if_app  = "com.openai.codex"
+    steps   = ["scroll:down@8"]
+
+    [macro.codex_previous_thread]
+    if_app  = "com.openai.codex"
+    steps   = ["combo:cmd+shift+["]
+
+    [macro.codex_next_thread]
+    if_app  = "com.openai.codex"
+    steps   = ["combo:cmd+shift+]"]
+
+    [macro.claude_focus]
+    if_app  = "Visual Studio Code"
+    steps   = [
+      "combo:cmd+shift+p",
+      "delay:100",
+      "type:Claude Code: Focus input",
+      "delay:100",
+      "tap:enter",
+    ]
+    """
 
     static func parseRightButtons(from text: String) -> [String: String] { parseSection("profile.right.buttons", from: text) }
     static func parseRightStick(from text: String) -> [String: String] { parseSection("profile.right.stick", from: text) }

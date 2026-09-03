@@ -12,6 +12,7 @@ Subcommands
 - ``rumble``     Trigger a rumble (goes through the running daemon if present,
                  otherwise opens HID directly).
 - ``schema``     Print the config's reference example — useful for AI copilots.
+- ``profile``    Manage mapping profiles (list, reset-default, export-default).
 """
 
 from __future__ import annotations
@@ -25,10 +26,20 @@ import time
 from . import __version__
 from .config import (
     ConfigError,
+    backup_config,
+    create_profile,
     default_config_path,
+    default_profiles_dir,
+    delete_profile,
+    ensure_profiles_initialized,
+    get_active_profile,
+    list_profiles,
     load_config,
+    read_default_profile,
     read_example_config,
     resolve_config_path,
+    set_active_profile,
+    switch_profile,
 )
 from .events import ButtonEvent, StickEvent
 from .ipc import IPCError, default_socket_path, is_daemon_running
@@ -93,6 +104,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("stop", help="gracefully stop the running mapping daemon")
 
+    p_reload = sub.add_parser(
+        "reload",
+        help="hot-reload mapping configuration in running daemon via IPC",
+    )
+    p_reload.add_argument("-c", "--config", help="path to config.toml")
+
     p_rumble = sub.add_parser("rumble", help="trigger rumble")
     p_rumble.add_argument(
         "--pattern",
@@ -114,6 +131,50 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     sub.add_parser("schema", help="print the starter config example")
+
+    p_profile = sub.add_parser("profile", help="manage mapping profiles")
+    p_profile_sub = p_profile.add_subparsers(
+        dest="profile_cmd", required=True, metavar="<profile-action>"
+    )
+    p_profile_sub.add_parser("list", help="list available profiles")
+    p_profile_sub.add_parser("current", help="print active profile name")
+
+    p_profile_create = p_profile_sub.add_parser("create", help="create a new profile")
+    p_profile_create.add_argument("name", help="profile name")
+    p_profile_create.add_argument(
+        "--from",
+        dest="from_profile",
+        help="source profile to clone from",
+    )
+    p_profile_create.add_argument(
+        "--switch",
+        "-s",
+        action="store_true",
+        help="switch to the new profile immediately",
+    )
+
+    p_profile_switch = p_profile_sub.add_parser("switch", help="switch to another profile")
+    p_profile_switch.add_argument("name", help="profile name")
+
+    p_profile_delete = p_profile_sub.add_parser("delete", help="delete a profile")
+    p_profile_delete.add_argument("name", help="profile name")
+    p_profile_delete.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="skip confirmation prompt",
+    )
+
+    p_profile_reset = p_profile_sub.add_parser(
+        "reset-default", help="reset active config to factory default profile"
+    )
+    p_profile_reset.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="skip confirmation prompt",
+    )
+    p_profile_sub.add_parser("export-default", help="print factory default profile to stdout")
 
     return parser
 
@@ -246,6 +307,27 @@ def cmd_stop(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_reload(args: argparse.Namespace) -> int:
+    payload: dict[str, Any] = {"cmd": "reload"}
+    if args.config:
+        payload["config_path"] = args.config
+    try:
+        reply = ipc_call(payload)
+    except IPCError as e:
+        print(f"reload failed: {e}", file=sys.stderr)
+        return 2
+
+    source = reply.get("source_path", "active config")
+    profiles = reply.get("profiles", [])
+    macros = reply.get("macros", [])
+    prof_str = ", ".join(profiles) if isinstance(profiles, list) else str(profiles)
+    macro_count = len(macros) if isinstance(macros, list) else macros
+    print(f"✓ vibejoy reloaded successfully ({source})")
+    print(f"   profiles: {prof_str or '(none)'}")
+    print(f"   macros:   {macro_count}")
+    return 0
+
+
 def cmd_permission(args: argparse.Namespace) -> int:
     from ApplicationServices import AXIsProcessTrusted
     from Quartz import CGPreflightPostEventAccess, CGRequestPostEventAccess
@@ -313,6 +395,83 @@ def cmd_schema(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_profile(args: argparse.Namespace) -> int:
+    if args.profile_cmd == "list":
+        profiles = list_profiles()
+        pdir = default_profiles_dir()
+        if not profiles:
+            print(f"no profiles found in {pdir}")
+            return 0
+        print(f"Profiles in {pdir}:")
+        for item in profiles:
+            bullet = "*" if item["is_active"] else "•"
+            baseline = " (factory baseline)" if item["is_default"] else ""
+            active = " (active)" if item["is_active"] else ""
+            print(f"  {bullet} {item['name']}{baseline}{active} -> {item['path']}")
+        return 0
+
+    if args.profile_cmd == "current":
+        print(get_active_profile())
+        return 0
+
+    if args.profile_cmd == "create":
+        target = create_profile(args.name, from_profile=args.from_profile)
+        print(f"✓ created profile '{args.name}' at {target}")
+        if args.switch:
+            switch_profile(args.name)
+            print(f"✓ switched active profile to '{args.name}'")
+        return 0
+
+    if args.profile_cmd == "switch":
+        target = switch_profile(args.name)
+        print(f"✓ switched active profile to '{args.name}' ({target})")
+        return 0
+
+    if args.profile_cmd == "delete":
+        if not args.force:
+            try:
+                ans = input(f"Delete profile '{args.name}'? [y/N]: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print("\naborted.")
+                return 1
+            if ans not in ("y", "yes"):
+                print("aborted.")
+                return 1
+        delete_profile(args.name)
+        print(f"✓ deleted profile '{args.name}'")
+        return 0
+
+    if args.profile_cmd == "reset-default":
+        if not args.force:
+            try:
+                ans = input("Reset active config to default profile? [y/N]: ").strip().lower()
+            except (EOFError, KeyboardInterrupt):
+                print("\naborted.")
+                return 1
+            if ans not in ("y", "yes"):
+                print("aborted.")
+                return 1
+
+        active_path = resolve_config_path(None)
+        backup_path = backup_config(active_path)
+        print(f"✓ backed up active config to {backup_path}")
+
+        default_content = read_default_profile()
+        active_path.parent.mkdir(parents=True, exist_ok=True)
+        active_path.write_text(default_content, encoding="utf-8")
+
+        set_active_profile("default")
+        load_config(active_path)
+        print(f"✓ restored default profile to {active_path}")
+        return 0
+
+    if args.profile_cmd == "export-default":
+        print(read_default_profile(), end="")
+        return 0
+
+    return 1
+
+
 # ---------- Helpers ----------
 
 
@@ -353,8 +512,10 @@ _HANDLERS: dict[str, callable] = {
     "doctor": cmd_doctor,
     "permission": cmd_permission,
     "stop": cmd_stop,
+    "reload": cmd_reload,
     "rumble": cmd_rumble,
     "schema": cmd_schema,
+    "profile": cmd_profile,
 }
 
 

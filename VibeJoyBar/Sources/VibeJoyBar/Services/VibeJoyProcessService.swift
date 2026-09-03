@@ -55,6 +55,24 @@ final class VibeJoyProcessService {
         else { prepareExclusiveLaunch() }
     }
 
+    func reload() async -> Bool {
+        guard desiredRunning, let proc = process, proc.isRunning else {
+            appendLog("VibeJoy 未在运行，正在启动…")
+            restart()
+            return false
+        }
+        appendLog("正在请求 VibeJoy 零中断热重载…")
+        let result = await runOneShot(arguments: ["reload"])
+        if result.exitCode == 0 {
+            appendLog("零中断热重载成功。")
+            return true
+        } else {
+            appendLog("热重载失败（\(result.output.trimmingCharacters(in: .whitespacesAndNewlines))），正在回退至完整重启…")
+            restart()
+            return false
+        }
+    }
+
     func clearLogs() { logLines.removeAll() }
 
     func runOneShot(arguments: [String]) async -> CommandResult {

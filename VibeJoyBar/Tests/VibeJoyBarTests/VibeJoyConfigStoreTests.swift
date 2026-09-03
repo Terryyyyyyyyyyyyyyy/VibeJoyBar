@@ -173,4 +173,161 @@ final class VibeJoyConfigStoreTests: XCTestCase {
         XCTAssertTrue(migrated.contains("steps = [\"scroll:up@8\"]"))
         XCTAssertTrue(migrated.contains("steps = [\"tap:page_up\", \"tap:enter\"]"))
     }
+
+    @MainActor
+    func testResetToDefaultProfileCreatesBackupAndRestoresBaseline() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let configURL = tempDir.appendingPathComponent("config.toml")
+        let customSource = """
+        [global]
+        deadzone = 0.50
+        poll_hz = 60
+
+        [profile.right.buttons]
+        a = "combo:cmd+c"
+        b = "combo:cmd+v"
+        """
+        try customSource.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let store = VibeJoyConfigStore(configURL: configURL)
+        XCTAssertEqual(store.action(for: .button("a")), "combo:cmd+c")
+        XCTAssertEqual(store.action(for: .button("b")), "combo:cmd+v")
+
+        try store.resetToDefaultProfile(createBackup: true)
+
+        let backupsDir = tempDir.appendingPathComponent("backups")
+        let backupFiles = try FileManager.default.contentsOfDirectory(at: backupsDir, includingPropertiesForKeys: nil)
+        XCTAssertEqual(backupFiles.count, 1)
+        let backupContent = try String(contentsOf: backupFiles[0], encoding: .utf8)
+        XCTAssertTrue(backupContent.contains("combo:cmd+c"))
+
+        XCTAssertEqual(store.action(for: .button("a")), "tap:enter")
+        XCTAssertEqual(store.action(for: .button("b")), "tap:escape")
+        XCTAssertEqual(store.action(for: .button("zr")), "app_switcher:system")
+        XCTAssertEqual(store.action(for: .button("home")), "window_switch:com.openai.codex")
+        XCTAssertEqual(store.action(for: .stick("up")), "macro:codex_page_up")
+        XCTAssertEqual(store.action(for: .stick("down")), "macro:codex_page_down")
+        XCTAssertEqual(store.action(for: .stick("left")), "macro:codex_previous_thread")
+        XCTAssertEqual(store.action(for: .stick("right")), "macro:codex_next_thread")
+        XCTAssertFalse(store.hasUnsavedChanges)
+    }
+
+    @MainActor
+    func testProfileScanningAndSorting() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let configURL = tempDir.appendingPathComponent("config.toml")
+        try VibeJoyConfigStore.fallbackDefaultConfig.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let profilesDir = tempDir.appendingPathComponent("profiles")
+        try FileManager.default.createDirectory(at: profilesDir, withIntermediateDirectories: true)
+        try "dummy".write(to: profilesDir.appendingPathComponent("default.toml"), atomically: true, encoding: .utf8)
+        try "dummy".write(to: profilesDir.appendingPathComponent("gaming.toml"), atomically: true, encoding: .utf8)
+        try "dummy".write(to: profilesDir.appendingPathComponent("browser.toml"), atomically: true, encoding: .utf8)
+        try "dummy".write(to: profilesDir.appendingPathComponent("alpha.toml"), atomically: true, encoding: .utf8)
+
+        let store = VibeJoyConfigStore(configURL: configURL)
+        let names = store.availableProfiles.map(\.name)
+        XCTAssertEqual(names, ["default", "alpha", "browser", "gaming"])
+        XCTAssertEqual(store.activeProfileName, "default")
+        XCTAssertTrue(store.availableProfiles[0].isActive)
+        XCTAssertTrue(store.availableProfiles[0].isDefault)
+    }
+
+    @MainActor
+    func testSaveAsNewProfile() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let configURL = tempDir.appendingPathComponent("config.toml")
+        try VibeJoyConfigStore.fallbackDefaultConfig.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let store = VibeJoyConfigStore(configURL: configURL)
+        let aIndex = try XCTUnwrap(store.bindings.firstIndex(where: { $0.button == "a" }))
+        store.setAction("combo:cmd+t", at: aIndex)
+
+        // Invalid names should throw
+        XCTAssertThrowsError(try store.saveAsNewProfile(named: ""))
+        XCTAssertThrowsError(try store.saveAsNewProfile(named: "   "))
+        XCTAssertThrowsError(try store.saveAsNewProfile(named: "../evil"))
+        XCTAssertThrowsError(try store.saveAsNewProfile(named: ".hidden"))
+
+        // Save as valid profile
+        try store.saveAsNewProfile(named: "coding")
+        XCTAssertEqual(store.activeProfileName, "coding")
+
+        let profilesDir = tempDir.appendingPathComponent("profiles")
+        let codingURL = profilesDir.appendingPathComponent("coding.toml")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: codingURL.path))
+        let savedContent = try String(contentsOf: codingURL, encoding: .utf8)
+        XCTAssertTrue(savedContent.contains("\"combo:cmd+t\""))
+
+        let activeProfileFile = tempDir.appendingPathComponent("active_profile")
+        let activeContent = try String(contentsOf: activeProfileFile, encoding: .utf8)
+        XCTAssertEqual(activeContent, "coding")
+
+        let activeItem = try XCTUnwrap(store.availableProfiles.first(where: { $0.name == "coding" }))
+        XCTAssertTrue(activeItem.isActive)
+        XCTAssertFalse(activeItem.isDefault)
+    }
+
+    @MainActor
+    func testSwitchProfileWithBackup() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let configURL = tempDir.appendingPathComponent("config.toml")
+        try VibeJoyConfigStore.fallbackDefaultConfig.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let store = VibeJoyConfigStore(configURL: configURL)
+        let aIndex = try XCTUnwrap(store.bindings.firstIndex(where: { $0.button == "a" }))
+        store.setAction("combo:cmd+n", at: aIndex)
+        try store.saveAsNewProfile(named: "browsing")
+
+        // Now switch back to default
+        try store.switchToProfile(named: "default")
+        XCTAssertEqual(store.activeProfileName, "default")
+        XCTAssertEqual(store.action(for: .button("a")), "tap:enter")
+
+        // Verify backup was made during switch
+        let backupsDir = tempDir.appendingPathComponent("backups")
+        let backups = try FileManager.default.contentsOfDirectory(at: backupsDir, includingPropertiesForKeys: nil)
+        XCTAssertFalse(backups.isEmpty)
+
+        // Switching to non-existent profile throws
+        XCTAssertThrowsError(try store.switchToProfile(named: "non_existent"))
+    }
+
+    @MainActor
+    func testSafeProfileDeletion() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let configURL = tempDir.appendingPathComponent("config.toml")
+        try VibeJoyConfigStore.fallbackDefaultConfig.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let store = VibeJoyConfigStore(configURL: configURL)
+        try store.saveAsNewProfile(named: "temp_profile")
+        XCTAssertEqual(store.activeProfileName, "temp_profile")
+
+        // Deleting default must fail
+        XCTAssertThrowsError(try store.deleteProfile(named: "default"))
+
+        // Deleting active profile must switch back to default and delete file
+        try store.deleteProfile(named: "temp_profile")
+        XCTAssertEqual(store.activeProfileName, "default")
+        let profilePath = tempDir.appendingPathComponent("profiles/temp_profile.toml").path
+        XCTAssertFalse(FileManager.default.fileExists(atPath: profilePath))
+
+        // Deleting non-existent profile throws
+        XCTAssertThrowsError(try store.deleteProfile(named: "temp_profile"))
+    }
 }

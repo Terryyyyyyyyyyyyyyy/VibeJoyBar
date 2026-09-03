@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.1
+
+- **方案预设系统 (Profile System)**：
+  - 固化出厂基准方案 `default.toml`，支持一键恢复与自动带时间戳物理备份 (`backups/`)。
+  - 多方案生命周期自由管理：支持另存为新方案、方案克隆、切换与安全删除（保护 default 方案）。
+  - **零中断热重载 (Zero-Interruption Hot Reload via IPC)**：通过 IPC 控制通道发送 `reload` 信号，原子热替换按键映射与采样参数，切换方案或保存配置时手柄不掉线、无重新校准延迟。
+  - VibeJoyBar 控制面板 Header 方案切换下拉菜单与「另存为新方案」交互，macOS 菜单栏常驻图标支持全局一键秒切。
+
 ## 0.9.0
 
 - Stick Up/Down native mouse wheel scrolling with smooth 60ms repeat.

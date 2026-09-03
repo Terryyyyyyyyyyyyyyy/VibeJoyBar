@@ -57,6 +57,7 @@ def run(
         )
 
     config = load_config(config_path)
+    config_holder = [config]
     logger.info("loaded config from %s", config.source_path)
 
     readers = discover_readers(
@@ -77,9 +78,18 @@ def run(
     try:
         _calibrate_available(readers)
         rumblers_by_side.update({r.side: r.rumbler for r in readers})
-        control_server = _start_control_server(rumblers_by_side, readers, stop_event, mapper=mapper)
+        control_server = _start_control_server(
+            rumblers_by_side, readers, stop_event, mapper=mapper, config_holder=config_holder
+        )
         _print_banner(readers, config)
-        _main_loop(readers, mapper, config, stop_event, rumblers_by_side=rumblers_by_side)
+        _main_loop(
+            readers,
+            mapper,
+            config,
+            stop_event,
+            rumblers_by_side=rumblers_by_side,
+            config_holder=config_holder,
+        )
     except KeyboardInterrupt:
         pass
     except WindowSwitchUnavailableError as e:
@@ -147,11 +157,13 @@ def _main_loop(
     stop_event: threading.Event,
     *,
     rumblers_by_side: dict[Side, Rumbler] | None = None,
+    config_holder: list[Config] | None = None,
 ) -> None:
-    interval = 1.0 / max(1, config.global_.poll_hz)
     rediscover_after = 0.0
     rumblers_by_side = rumblers_by_side if rumblers_by_side is not None else {}
     while not stop_event.is_set():
+        current_config = config_holder[0] if config_holder else config
+        interval = 1.0 / max(1, current_config.global_.poll_hz)
         loop_start = time.monotonic()
         for reader in list(readers):
             if not reader.is_connected:
@@ -166,7 +178,7 @@ def _main_loop(
         now = time.monotonic()
         if now >= rediscover_after:
             rediscover_after = now + 2.0
-            _rediscover_missing(readers, mapper, config, rumblers_by_side)
+            _rediscover_missing(readers, mapper, current_config, rumblers_by_side)
 
         elapsed = time.monotonic() - loop_start
         remaining = interval - elapsed
@@ -227,6 +239,7 @@ def _start_control_server(
     stop_event: threading.Event,
     *,
     mapper: Mapper | None = None,
+    config_holder: list[Config] | None = None,
 ) -> ControlServer | None:
     """Install the IPC handler. Failure to bind is non-fatal."""
 
@@ -284,6 +297,33 @@ def _start_control_server(
         if request.cmd == "stop":
             stop_event.set()
             return {"stopping": True}
+
+        if request.cmd == "reload":
+            target_path = request.args.get("config_path")
+            if not target_path and config_holder and config_holder[0].source_path:
+                target_path = str(config_holder[0].source_path)
+            elif not target_path and mapper and hasattr(mapper, "_config") and mapper._config.source_path:
+                target_path = str(mapper._config.source_path)
+
+            new_config = load_config(target_path)
+            if mapper is not None:
+                mapper.reload_config(new_config)
+            for r in readers:
+                try:
+                    r.deadzone = new_config.global_.deadzone
+                    r.stick_mode = new_config.global_.stick_mode
+                except Exception as e:
+                    logger.warning("failed to update reader %s during reload: %s", r.side, e)
+            if config_holder:
+                config_holder[0] = new_config
+            logger.info("reloaded config from %s", new_config.source_path)
+            return {
+                "ok": True,
+                "reloaded": True,
+                "source_path": str(new_config.source_path),
+                "profiles": sorted(new_config.profiles.keys()),
+                "macros": sorted(new_config.macros.keys()),
+            }
 
         if request.cmd == "rumble":
             pattern_spec = str(request.args.get("pattern") or "short")
