@@ -31,19 +31,23 @@ right   = "macro:codex_next_thread"      # next Codex chat; ZR still overrides t
 # ─────────── Left Joy-Con (only used if paired) ───────────
 
 [profile.left.buttons]
-a       = "tap:enter"
-b       = "tap:escape"
-l       = "combo:cmd+tab"
-zl      = "hold:cmd"
-minus   = "combo:cmd+z"
-capture = "combo:cmd+shift+3"           # macOS screenshot
-"l-stick" = "tap:tab"
+right   = "tap:enter"                       # 对应 A
+down    = "tap:escape"                      # 对应 B
+up      = "combo:option+0"                  # 对应 X
+left    = "combo:option+1"                  # 对应 Y
+l       = "combo:option+2"                  # 对应 R
+zl      = "app_switcher:system"             # 对应 ZR
+minus   = "combo:cmd+s"                     # 对应 +
+capture = "window_switch:com.openai.codex"  # 对应 Home
+"l-stick" = "none"
+sl      = "none"
+sr      = "none"
 
 [profile.left.stick]
-up      = "none"
-down    = "none"
-left    = "none"
-right   = "none"
+up      = "macro:codex_page_up"
+down    = "macro:codex_page_down"
+left    = "macro:codex_previous_thread"
+right   = "macro:codex_next_thread"
 
 # ─────────── Macros ───────────
 

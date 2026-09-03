@@ -1,0 +1,23 @@
+# VibeJoy 左手 Joy-Con 默认方案
+# 左手 Joy-Con 物理布局：摇杆（L-Stick）在上，方向键（D-Pad）在下
+# 肩键：L（内侧） / ZL（外侧），滑轨键：SL / SR
+# 系统键：Minus（-），功能键：Capture（截图）
+
+[profile.left.stick]
+up    = "macro:codex_page_up"
+down  = "macro:codex_page_down"
+left  = "macro:codex_previous_thread"
+right = "macro:codex_next_thread"
+
+[profile.left.buttons]
+right    = "tap:enter"                       # 对应 A (Enter)
+down     = "tap:escape"                      # 对应 B (Esc)
+up       = "combo:option+0"                  # 对应 X (Option+0)
+left     = "combo:option+1"                  # 对应 Y (Option+1)
+l        = "combo:option+2"                  # 对应 R (Option+2)
+zl       = "app_switcher:system"             # 对应 ZR (App Switcher)
+minus    = "combo:cmd+s"                     # 对应 + (保存)
+capture  = "window_switch:com.openai.codex"  # 对应 Home (Codex)
+"l-stick" = "none"
+sl       = "none"
+sr       = "none"

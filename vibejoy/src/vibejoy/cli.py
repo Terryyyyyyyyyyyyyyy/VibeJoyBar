@@ -104,6 +104,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("stop", help="gracefully stop the running mapping daemon")
 
+    sub.add_parser("status", help="query running mapping daemon status via IPC")
+
     p_reload = sub.add_parser(
         "reload",
         help="hot-reload mapping configuration in running daemon via IPC",
@@ -304,6 +306,16 @@ def cmd_stop(_args: argparse.Namespace) -> int:
         return 2
     if reply.get("stopping"):
         print("VibeJoy daemon is stopping")
+    return 0
+
+
+def cmd_status(_args: argparse.Namespace) -> int:
+    try:
+        reply = ipc_call({"cmd": "status"})
+    except IPCError as e:
+        print(f"no controllable VibeJoy daemon: {e}", file=sys.stderr)
+        return 2
+    print(json.dumps(reply, ensure_ascii=False))
     return 0
 
 
@@ -512,6 +524,7 @@ _HANDLERS: dict[str, callable] = {
     "doctor": cmd_doctor,
     "permission": cmd_permission,
     "stop": cmd_stop,
+    "status": cmd_status,
     "reload": cmd_reload,
     "rumble": cmd_rumble,
     "schema": cmd_schema,

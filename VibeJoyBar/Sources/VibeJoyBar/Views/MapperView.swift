@@ -12,7 +12,7 @@ struct MapperView: View {
             HSplitView {
                 DashboardSidebar(model: model, selection: $selection, showingStickEditor: $showingStickEditor)
                     .frame(minWidth: 230, idealWidth: 270, maxWidth: 320)
-                ControllerIllustrationView(selection: $selection)
+                ControllerIllustrationView(selection: $selection, controllerSide: model.activeControllerSide)
                     .frame(minWidth: 470, idealWidth: 560)
                 MappingInspector(model: model, selection: $selection, showingStickEditor: $showingStickEditor)
                     .frame(minWidth: 340, idealWidth: 390, maxWidth: 450)
@@ -44,11 +44,22 @@ struct DashboardHeader: View {
                 Image(systemName: model.processService.phase.symbolName).foregroundStyle(statusColor)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text("右 Joy-Con 控制器")
+                Text(model.activeControllerSide.displayName + " 控制器")
                     .font(.title3.weight(.semibold))
                 Text(model.processService.phase.title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            if model.processService.connectedSides.count > 1 {
+                Picker("手柄侧", selection: Binding(
+                    get: { model.activeControllerSide },
+                    set: { model.activeControllerSide = $0 }
+                )) {
+                    Text("◖ 左手").tag(ActiveControllerSide.left)
+                    Text("右手 ◗").tag(ActiveControllerSide.right)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 180)
             }
             Spacer()
 
@@ -152,6 +163,9 @@ struct DashboardHeader: View {
         }
         .padding(.horizontal, 22)
         .padding(.vertical, 14)
+        .onChange(of: model.processService.connectedSides) { _, _ in
+            model.syncActiveControllerSide()
+        }
     }
 
     private var statusColor: Color {

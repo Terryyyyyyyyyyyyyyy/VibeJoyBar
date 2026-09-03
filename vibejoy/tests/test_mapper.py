@@ -61,17 +61,25 @@ class FakeWindow:
 def _config(
     right_buttons: dict[str, str] | None = None,
     right_stick: dict[str, str] | None = None,
+    left_buttons: dict[str, str] | None = None,
+    left_stick: dict[str, str] | None = None,
     macros: dict[str, MacroDef] | None = None,
     long_press_ms: int = 250,
 ) -> Config:
+    profiles: dict[str, ProfileConfig] = {
+        "right": ProfileConfig(
+            buttons=right_buttons or {},
+            stick=right_stick or {},
+        ),
+    }
+    if left_buttons is not None or left_stick is not None:
+        profiles["left"] = ProfileConfig(
+            buttons=left_buttons or {},
+            stick=left_stick or {},
+        )
     return Config(
         global_=GlobalConfig(long_press_ms=long_press_ms),
-        profiles={
-            "right": ProfileConfig(
-                buttons=right_buttons or {},
-                stick=right_stick or {},
-            ),
-        },
+        profiles=profiles,
         macros=macros or {},
     )
 
@@ -499,3 +507,44 @@ class TestStickScrollAutoRepeat:
         # Center stick clears repeat
         mapper.on_event(StickEvent(side="right", direction=None))
         assert "right:stick" not in mapper._state.stick_scroll_repeat
+
+    def test_left_button_mirrors_right_counterpart_when_unconfigured(
+        self, kbd: FakeKeyboard, win: FakeWindow
+    ) -> None:
+        cfg = _config(
+            right_buttons={"a": "tap:enter", "b": "tap:escape", "r": "combo:option+2"},
+            right_stick={"up": "tap:page_up"},
+        )
+        mapper = Mapper(cfg, kbd, win)
+
+        # Left D-Pad "right" mirrors right "a"
+        mapper.on_event(ButtonEvent(side="left", button="right", pressed=True))
+        mapper.on_event(ButtonEvent(side="left", button="right", pressed=False))
+        assert ("tap", "enter") in kbd.events
+
+        # Left D-Pad "down" mirrors right "b"
+        mapper.on_event(ButtonEvent(side="left", button="down", pressed=True))
+        mapper.on_event(ButtonEvent(side="left", button="down", pressed=False))
+        assert ("tap", "escape") in kbd.events
+
+        # Left shoulder "l" mirrors right "r"
+        mapper.on_event(ButtonEvent(side="left", button="l", pressed=True))
+        mapper.on_event(ButtonEvent(side="left", button="l", pressed=False))
+        assert ("combo", ("option", "2")) in kbd.events
+
+        # Left stick mirrors right stick
+        mapper.on_event(StickEvent(side="left", direction="up"))
+        assert ("tap", "page_up") in kbd.events
+
+    def test_left_explicit_override_takes_precedence_over_mirror(
+        self, kbd: FakeKeyboard, win: FakeWindow
+    ) -> None:
+        cfg = _config(
+            right_buttons={"a": "tap:enter"},
+            left_buttons={"right": "tap:space"},
+        )
+        mapper = Mapper(cfg, kbd, win)
+        mapper.on_event(ButtonEvent(side="left", button="right", pressed=True))
+        mapper.on_event(ButtonEvent(side="left", button="right", pressed=False))
+        assert ("tap", "space") in kbd.events
+        assert ("tap", "enter") not in kbd.events

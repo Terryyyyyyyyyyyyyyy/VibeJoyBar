@@ -7,6 +7,7 @@ import Darwin
 final class VibeJoyProcessService {
     private(set) var phase: VibeJoyPhase = .stopped
     private(set) var logLines: [String] = []
+    private(set) var connectedSides: Set<String> = []
     private(set) var desiredRunning = false
     var projectURL: URL
     var uvURL: URL
@@ -39,6 +40,7 @@ final class VibeJoyProcessService {
     /// menu-bar quit cannot strand a Python/uv child process.
     func terminateForShutdown() {
         desiredRunning = false
+        stopStatusPolling()
         retryTask?.cancel(); launchPreparationTask?.cancel(); stopTask?.cancel()
         let command = resolvedCommand(arguments: ["stop"])
         let request = Process(); let pipe = Pipe()
@@ -105,7 +107,16 @@ final class VibeJoyProcessService {
         stderr.fileHandleForReading.readabilityHandler = { [weak self] handle in let data = handle.availableData; guard !data.isEmpty else { return }; Task { @MainActor in self?.consume(String(decoding: data, as: UTF8.self)) } }
         child.terminationHandler = { [weak self] terminated in let code = terminated.terminationStatus; Task { @MainActor in self?.handleTermination(code: code) } }
         process = child; stdoutPipe = stdout; stderrPipe = stderr; phase = .starting; appendLog("启动 VibeJoy（\(command.executable.lastPathComponent)）…")
-        do { try child.run() } catch { process = nil; cleanupPipes(); phase = .failed(error.localizedDescription); appendLog("启动失败：\(error.localizedDescription)"); scheduleRetry(afterNanoseconds: 8_000_000_000) }
+        do {
+            try child.run()
+            startStatusPolling()
+        } catch {
+            process = nil
+            cleanupPipes()
+            phase = .failed(error.localizedDescription)
+            appendLog("启动失败：\(error.localizedDescription)")
+            scheduleRetry(afterNanoseconds: 8_000_000_000)
+        }
     }
 
     private func prepareExclusiveLaunch() {
@@ -123,6 +134,7 @@ final class VibeJoyProcessService {
     }
 
     private func finishStop() {
+        stopStatusPolling()
         guard let child = process else { phase = .stopped; appendLog("VibeJoy 已停止。"); return }
         if child.isRunning {
             child.interrupt(); appendLog("已发送停止信号，正在清理后台进程…")
@@ -139,19 +151,81 @@ final class VibeJoyProcessService {
     private func consume(_ text: String) {
         for line in text.components(separatedBy: .newlines) where !line.isEmpty {
             appendLog(line)
-            if line.contains("connected: right") { phase = .running("右手柄") }
-            else if line.contains("connected: left") { phase = .running("左手柄") }
-            else if line.contains("disconnected:") || line.contains("waiting:") || line.contains("no Joy-Con") || line.contains("none detected") { phase = .waitingForController }
+            if line.contains("connected:") {
+                if line.contains("right") {
+                    connectedSides.insert("right")
+                }
+                if line.contains("left") {
+                    connectedSides.insert("left")
+                }
+            }
+            if line.contains("disconnected:") {
+                if line.contains("right") {
+                    connectedSides.remove("right")
+                }
+                if line.contains("left") {
+                    connectedSides.remove("left")
+                }
+            }
+            if line.contains("waiting:") || line.contains("no Joy-Con") || line.contains("none detected") {
+                connectedSides.removeAll()
+            }
+            updatePhaseFromConnectedSides(line: line)
         }
     }
 
+    private func updatePhaseFromConnectedSides(line: String? = nil) {
+        let sides = connectedSides
+        if !sides.isEmpty {
+            if sides.count > 1 {
+                phase = .running("双持")
+            } else if sides.contains("right") {
+                phase = .running("右手柄")
+            } else {
+                phase = .running("左手柄")
+            }
+        } else if let line = line, (line.contains("disconnected:") || line.contains("waiting:") || line.contains("no Joy-Con") || line.contains("none detected")) {
+            phase = .waitingForController
+        }
+    }
+
+    private var statusPollTask: Task<Void, Never>?
+
+    private func startStatusPolling() {
+        statusPollTask?.cancel()
+        statusPollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                guard !Task.isCancelled, let self else { break }
+                guard self.desiredRunning, self.process != nil else { continue }
+                let result = await self.runOneShot(arguments: ["status"])
+                guard !Task.isCancelled, result.exitCode == 0 else { continue }
+                if let data = result.output.data(using: .utf8),
+                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let sidesList = json["sides"] as? [String] {
+                    let newSides = Set(sidesList)
+                    if newSides != self.connectedSides {
+                        self.connectedSides = newSides
+                        self.updatePhaseFromConnectedSides()
+                    }
+                }
+            }
+        }
+    }
+
+    private func stopStatusPolling() {
+        statusPollTask?.cancel()
+        statusPollTask = nil
+    }
+
     private func handleTermination(code: Int32) {
+        stopStatusPolling()
         cleanupPipes(); process = nil
         if desiredRunning {
             if restartRequested { restartRequested = false; phase = .starting; scheduleRetry(afterNanoseconds: 400_000_000); return }
             if code == 2 { phase = .waitingForController; appendLog("未检测到 Joy-Con，稍后自动重试。") } else if code == 3 { phase = .failed("检测到另一个 VibeJoy 进程"); appendLog("检测到另一个 VibeJoy 进程，正在尝试接管。") } else { phase = .failed("退出码 \(code)"); appendLog("VibeJoy 已退出（\(code)），稍后自动重试。") }
             scheduleRetry(afterNanoseconds: 8_000_000_000)
-        } else { phase = .stopped; appendLog("VibeJoy 已停止。") }
+        } else { connectedSides.removeAll(); phase = .stopped; appendLog("VibeJoy 已停止。") }
     }
 
     private func scheduleRetry(afterNanoseconds delay: UInt64) { guard desiredRunning else { return }; retryTask?.cancel(); retryTask = Task { [weak self] in try? await Task.sleep(nanoseconds: delay); guard !Task.isCancelled else { return }; self?.launchIfNeeded() } }

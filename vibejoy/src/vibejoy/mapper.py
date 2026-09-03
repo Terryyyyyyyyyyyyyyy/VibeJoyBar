@@ -122,6 +122,21 @@ class _MapperState:
     app_switcher_repeat_first: bool = True
 
 
+LEFT_TO_RIGHT_BUTTON_MIRROR: dict[str, str] = {
+    "right": "a",
+    "down": "b",
+    "up": "x",
+    "left": "y",
+    "l": "r",
+    "zl": "zr",
+    "minus": "plus",
+    "capture": "home",
+    "l-stick": "r-stick",
+    "sl": "sl",
+    "sr": "sr",
+}
+
+
 class Mapper:
     """Map events + config to side effects on keyboard / window / rumble."""
 
@@ -584,21 +599,23 @@ class Mapper:
 
     def _lookup_button(self, side: Side, button: str) -> Action | None:
         profile = self._config.profiles.get(side)
-        if profile is None:
-            return None
-        spec = profile.buttons.get(button)
-        if spec is None:
-            return None
-        return self._precompiled.get(f"profile.{side}.buttons.{button}")
+        if profile is not None and button in profile.buttons:
+            return self._precompiled.get(f"profile.{side}.buttons.{button}")
+        # When left-side button has no explicit binding, mirror right-side counterpart
+        if side == "left":
+            mirror_btn = LEFT_TO_RIGHT_BUTTON_MIRROR.get(button)
+            if mirror_btn is not None:
+                return self._precompiled.get(f"profile.right.buttons.{mirror_btn}")
+        return None
 
     def _lookup_stick(self, side: Side, direction: Direction) -> Action | None:
         profile = self._config.profiles.get(side)
-        if profile is None:
-            return None
-        spec = profile.stick.get(direction)
-        if spec is None:
-            return None
-        return self._precompiled.get(f"profile.{side}.stick.{direction}")
+        if profile is not None and direction in profile.stick:
+            return self._precompiled.get(f"profile.{side}.stick.{direction}")
+        # When left-side stick has no explicit binding, mirror right-side counterpart
+        if side == "left":
+            return self._precompiled.get(f"profile.right.stick.{direction}")
+        return None
 
     def _precompile(self, config: Config) -> dict[str, Action]:
         """Parse every action spec once so hot-path lookup doesn't re-parse."""

@@ -17,6 +17,10 @@ final class AppModel {
     var activityMessage = ""
     var isBusy = false
 
+    /// The side currently shown in the control panel.
+    /// Auto-locks to the single connected side; in dual mode the user can toggle.
+    var activeControllerSide: ActiveControllerSide = .right
+
     private let defaults = UserDefaults.standard
 
     private init() {
@@ -50,6 +54,19 @@ final class AppModel {
     func startOnLaunchIfNeeded() {
         if autoRunOnLaunch {
             processService.start()
+        }
+    }
+
+    /// Called whenever connectedSides changes to auto-select the appropriate side.
+    func syncActiveControllerSide() {
+        let sides = processService.connectedSides
+        if sides.count == 1 {
+            activeControllerSide = sides.contains("left") ? .left : .right
+        }
+        // Dual-hold: keep user's current selection
+        // No connection: reset to right for next session
+        if sides.isEmpty {
+            activeControllerSide = .right
         }
     }
 

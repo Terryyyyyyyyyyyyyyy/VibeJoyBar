@@ -22,7 +22,7 @@ struct MappingInspector: View {
     @ViewBuilder private func inspector(_ selected: MappingSelection) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("控制检查器").font(.caption.weight(.bold)).foregroundStyle(.tertiary).tracking(1)
-            Text(selected.label).font(.title2.weight(.bold))
+            Text(selectionTitle(selected)).font(.title2.weight(.bold))
             Text(purpose(for: selected)).font(.callout).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -32,10 +32,10 @@ struct MappingInspector: View {
                 HStack(spacing: 8) {
                     Image(systemName: "command")
                         .foregroundStyle(Color.accentColor)
-                    Text(ActionSummary.text(for: model.configStore.action(for: selected)))
+                    Text(ActionSummary.text(for: model.configStore.action(for: selected, side: model.activeControllerSide)))
                         .font(.body.weight(.semibold))
                 }
-                if model.configStore.action(for: selected) == "none" {
+                if model.configStore.action(for: selected, side: model.activeControllerSide) == "none" {
                     Text("安全停用 · 不会发送输入").font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -107,20 +107,47 @@ struct MappingInspector: View {
         }
 
         HStack {
-            Button("设为不执行") { model.configStore.setAction("none", for: selected) }
+            Button("设为不执行") { model.configStore.setAction("none", for: selected, side: model.activeControllerSide) }
                 .buttonStyle(.bordered)
             Spacer()
-            Button("恢复默认") { model.configStore.setAction(MappingDefaults.action(for: selected), for: selected) }
+            Button("恢复默认") { model.configStore.setAction(MappingDefaults.action(for: selected), for: selected, side: model.activeControllerSide) }
                 .buttonStyle(.bordered)
         }
         .font(.caption)
     }
 
+    private func selectionTitle(_ selected: MappingSelection) -> String {
+        switch selected {
+        case let .button(value):
+            switch value {
+            case "plus": return "+"
+            case "minus": return "-"
+            case "r-stick": return "R 摇杆按下"
+            case "l-stick": return "L 摇杆按下"
+            case "home": return "Home"
+            case "capture": return "Capture"
+            case "up": return model.activeControllerSide == .left ? "D-Pad ↑" : "UP"
+            case "down": return model.activeControllerSide == .left ? "D-Pad ↓" : "DOWN"
+            case "left": return model.activeControllerSide == .left ? "D-Pad ←" : "LEFT"
+            case "right": return model.activeControllerSide == .left ? "D-Pad →" : "RIGHT"
+            default: return value.uppercased()
+            }
+        case let .stick(value):
+            return "\(model.activeControllerSide.stickLabel) · \(value.capitalized)"
+        }
+    }
+
     private func presetBinding(for selected: MappingSelection) -> Binding<String> {
-        Binding(get: { model.configStore.action(for: selected) }, set: { model.configStore.setAction($0, for: selected) })
+        Binding(
+            get: { model.configStore.action(for: selected, side: model.activeControllerSide) },
+            set: { model.configStore.setAction($0, for: selected, side: model.activeControllerSide) }
+        )
     }
     private func actionBinding(for selected: MappingSelection) -> Binding<String> {
-        Binding(get: { model.configStore.action(for: selected) }, set: { model.configStore.setAction($0, for: selected) })
+        Binding(
+            get: { model.configStore.action(for: selected, side: model.activeControllerSide) },
+            set: { model.configStore.setAction($0, for: selected, side: model.activeControllerSide) }
+        )
     }
     private func purpose(for selected: MappingSelection) -> String {
         switch selected {
@@ -132,8 +159,16 @@ struct MappingInspector: View {
         case .button("zr"): "按住进入系统 App 切换 · 摇杆左右导航（支持连发）"
         case .button("plus"): "保存 / Cmd+S"
         case .button("home"): "聚焦 Codex"
-        case .button("r-stick"): "摇杆按下"
-        case .button("sl"), .button("sr"): "侧边肩键"
+        case .button("r-stick"), .button("l-stick"): "摇杆按下"
+        case .button("sl"), .button("sr"): "侧边滑轨按键"
+        case .button("minus"): "减号键 (-)"
+        case .button("capture"): "截图键 (Capture)"
+        case .button("l"): "L 肩键"
+        case .button("zl"): "ZL 扳机键"
+        case .button("up"): model.activeControllerSide == .left ? "方向键上 (D-Pad Up)" : "方向键上"
+        case .button("down"): model.activeControllerSide == .left ? "方向键下 (D-Pad Down)" : "方向键下"
+        case .button("left"): model.activeControllerSide == .left ? "方向键左 (D-Pad Left)" : "方向键左"
+        case .button("right"): model.activeControllerSide == .left ? "方向键右 (D-Pad Right)" : "方向键右"
         case .button: "自定义按键动作"
         case .stick("up"): "Codex 当前对话 · 原生向上滚动约一页"
         case .stick("down"): "Codex 当前对话 · 原生向下滚动约一页"
@@ -240,11 +275,21 @@ struct JoystickEditorView: View {
             }
             DeadzonePreviewView(deadzone: model.configStore.deadzone)
                 .frame(height: 120)
-            ForEach(Array(model.configStore.stickBindings.enumerated()), id: \.element.id) { index, binding in
+            let stickList = model.activeControllerSide == .right ? model.configStore.stickBindings : model.configStore.leftStickBindings
+            ForEach(Array(stickList.enumerated()), id: \.element.id) { index, binding in
                 HStack {
                     Text(binding.displayName).frame(width: 35, alignment: .leading)
-                    TextField("none", text: Binding(get: { model.configStore.stickBindings[index].action }, set: { model.configStore.setStickAction($0, at: index) }))
-                        .textFieldStyle(.roundedBorder).font(.system(.body, design: .monospaced))
+                    TextField("none", text: Binding(
+                        get: { binding.action },
+                        set: {
+                            if model.activeControllerSide == .right {
+                                model.configStore.setStickAction($0, at: index)
+                            } else {
+                                model.configStore.setLeftStickAction($0, at: index)
+                            }
+                        }
+                    ))
+                    .textFieldStyle(.roundedBorder).font(.system(.body, design: .monospaced))
                     Button("选择") { selection = .stick(binding.direction) }.buttonStyle(.bordered)
                 }
             }

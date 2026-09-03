@@ -9,7 +9,14 @@ struct ButtonBinding: Identifiable, Equatable {
     var displayName: String {
         switch button {
         case "plus": "+"
+        case "minus": "-"
         case "r-stick": "R 摇杆"
+        case "l-stick": "L 摇杆"
+        case "capture": "截图"
+        case "up": "↑ (X)"
+        case "down": "↓ (B)"
+        case "left": "← (Y)"
+        case "right": "→ (A)"
         default: button.uppercased()
         }
     }
@@ -76,7 +83,7 @@ enum MappingSelection: Hashable {
     var label: String {
         switch self {
         case let .button(value): value == "plus" ? "Plus" : value.uppercased()
-        case let .stick(value): "R 摇杆 · \(value.capitalized)"
+        case let .stick(value): "摇杆 · \(value.capitalized)"
         }
     }
 }
@@ -131,6 +138,16 @@ struct MappingPreset: Identifiable {
         .init(title: "Type4Me 润色 F18", action: "tap:f18"),
         .init(title: "Type4Me 快速 F19", action: "tap:f19"),
     ]
+}
+
+/// Which Joy-Con side the control panel is currently showing.
+enum ActiveControllerSide: String, CaseIterable, Hashable {
+    case right = "right"
+    case left  = "left"
+
+    var displayName: String { self == .right ? "右 Joy-Con" : "左 Joy-Con" }
+    var stickLabel: String  { self == .right ? "R 摇杆" : "L 摇杆" }
+    var stickButtonID: String { self == .right ? "r-stick" : "l-stick" }
 }
 
 enum VibeJoyPhase: Equatable {

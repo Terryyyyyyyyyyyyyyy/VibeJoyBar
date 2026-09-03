@@ -6,12 +6,21 @@ enum ControllerViewMode: String, CaseIterable {
     case shoulder
 
     var title: String { self == .front ? "正面" : "肩部" }
-    var assetName: String { self == .front ? "right-joycon-front.png" : "right-joycon-shoulder.png" }
-    var help: String { self == .front ? "正面按键与摇杆" : "肩部 R / ZR" }
+    var help: String { self == .front ? "正面按键与摇杆" : "肩部" }
+
+    func assetName(for side: ActiveControllerSide) -> String {
+        switch (self, side) {
+        case (.front, .right):    return "right-joycon-front.png"
+        case (.shoulder, .right): return "right-joycon-shoulder.png"
+        case (.front, .left):     return "left-joycon-front.png"
+        case (.shoulder, .left):  return "left-joycon-shoulder.png"
+        }
+    }
 }
 
 struct ControllerIllustrationView: View {
     @Binding var selection: MappingSelection?
+    var controllerSide: ActiveControllerSide = .right
     @State private var mode: ControllerViewMode = .front
     @State private var hoveredHotspot: String?
     @FocusState private var focusedHotspot: String?
@@ -20,8 +29,9 @@ struct ControllerIllustrationView: View {
         VStack(spacing: 0) {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("右 Joy-Con").font(.title3.weight(.semibold))
-                    Text(mode.help).font(.caption).foregroundStyle(.secondary)
+                    Text(controllerSide.displayName).font(.title3.weight(.semibold))
+                    Text(mode == .front ? "正面按键与摇杆" : (controllerSide == .right ? "肩部 R / ZR" : "肩部 L / ZL"))
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Picker("控制器视图", selection: $mode) {
@@ -41,8 +51,13 @@ struct ControllerIllustrationView: View {
                     Text("肩键")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.tertiary)
-                    shoulderCapsule("r", label: "R")
-                    shoulderCapsule("zr", label: "ZR")
+                    if controllerSide == .right {
+                        shoulderCapsule("r", label: "R")
+                        shoulderCapsule("zr", label: "ZR")
+                    } else {
+                        shoulderCapsule("l", label: "L")
+                        shoulderCapsule("zl", label: "ZL")
+                    }
                     Spacer()
                 }
                 .padding(.horizontal, 26)
@@ -116,42 +131,76 @@ struct ControllerIllustrationView: View {
 
     @ViewBuilder private var assetCanvas: some View {
         if mode == .front {
-            controllerAsset(mode.assetName, aspect: 0.40) { size in
-                // Stick compass backdrop centered directly on analog stick
-                stickCompassBackdrop(x: 0.677, y: 0.540, in: size)
+            if controllerSide == .right {
+                controllerAsset(mode.assetName(for: controllerSide), aspect: 0.40) { size in
+                    // Stick compass backdrop centered directly on analog stick
+                    stickCompassBackdrop(x: 0.677, y: 0.540, in: size)
 
-                // Face buttons matched to exact asset pixel centers
-                faceHotspot("plus", x: 0.442, y: 0.132, in: size)
-                faceHotspot("x", x: 0.651, y: 0.211, in: size)
-                faceHotspot("y", x: 0.494, y: 0.283, in: size)
-                faceHotspot("a", x: 0.807, y: 0.283, in: size)
-                faceHotspot("b", x: 0.651, y: 0.354, in: size)
+                    // Face buttons matched to exact asset pixel centers
+                    faceHotspot("plus", x: 0.442, y: 0.132, in: size)
+                    faceHotspot("x", x: 0.651, y: 0.211, in: size)
+                    faceHotspot("y", x: 0.494, y: 0.283, in: size)
+                    faceHotspot("a", x: 0.807, y: 0.283, in: size)
+                    faceHotspot("b", x: 0.651, y: 0.354, in: size)
 
-                // Stick center and 4 direction arrow dials
-                faceHotspot("r-stick", x: 0.677, y: 0.540, in: size)
-                stickDirectionHotspot("up", symbol: "arrow.up", x: 0.677, y: 0.468, in: size)
-                stickDirectionHotspot("left", symbol: "arrow.left", x: 0.535, y: 0.540, in: size)
-                stickDirectionHotspot("right", symbol: "arrow.right", x: 0.819, y: 0.540, in: size)
-                stickDirectionHotspot("down", symbol: "arrow.down", x: 0.677, y: 0.612, in: size)
+                    // Stick center and 4 direction arrow dials
+                    faceHotspot("r-stick", x: 0.677, y: 0.540, in: size)
+                    stickDirectionHotspot("up", symbol: "arrow.up", x: 0.677, y: 0.468, in: size)
+                    stickDirectionHotspot("left", symbol: "arrow.left", x: 0.535, y: 0.540, in: size)
+                    stickDirectionHotspot("right", symbol: "arrow.right", x: 0.819, y: 0.540, in: size)
+                    stickDirectionHotspot("down", symbol: "arrow.down", x: 0.677, y: 0.612, in: size)
 
-                // Home and rail buttons
-                faceHotspot("home", x: 0.529, y: 0.713, in: size)
-                faceHotspot("sl", x: 0.158, y: 0.290, in: size)
-                faceHotspot("sr", x: 0.160, y: 0.660, in: size)
+                    // Home and rail buttons
+                    faceHotspot("home", x: 0.529, y: 0.713, in: size)
+                    faceHotspot("sl", x: 0.158, y: 0.290, in: size)
+                    faceHotspot("sr", x: 0.160, y: 0.660, in: size)
+                }
+            } else {
+                // Left Joy-Con front: rounded edge on LEFT, rail on RIGHT
+                // L-Stick upper, D-Pad lower, Minus top, Capture bottom
+                controllerAsset(mode.assetName(for: controllerSide), aspect: 0.40) { size in
+                    // L-Stick area (upper region) — mirrored x from right-hand stick coords
+                    stickCompassBackdrop(x: 0.400, y: 0.280, in: size)
+                    faceHotspot("l-stick", x: 0.400, y: 0.280, in: size)
+                    stickDirectionHotspot("up",    symbol: "arrow.up",    x: 0.400, y: 0.208, in: size)
+                    stickDirectionHotspot("left",  symbol: "arrow.left",  x: 0.258, y: 0.280, in: size)
+                    stickDirectionHotspot("right", symbol: "arrow.right", x: 0.542, y: 0.280, in: size)
+                    stickDirectionHotspot("down",  symbol: "arrow.down",  x: 0.400, y: 0.352, in: size)
+                    // Minus (top-right area, near rail) and Capture (bottom center)
+                    faceHotspot("minus",   x: 0.442, y: 0.132, in: size)
+                    faceHotspot("capture", x: 0.400, y: 0.780, in: size)
+                    // D-Pad (lower region, center-left)
+                    faceHotspot("up",    x: 0.380, y: 0.530, in: size)
+                    faceHotspot("down",  x: 0.380, y: 0.672, in: size)
+                    faceHotspot("left",  x: 0.238, y: 0.601, in: size)
+                    faceHotspot("right", x: 0.522, y: 0.601, in: size)
+                    // Rail buttons — on the RIGHT side now
+                    faceHotspot("sl", x: 0.842, y: 0.290, in: size)
+                    faceHotspot("sr", x: 0.842, y: 0.660, in: size)
+                }
             }
         } else {
-            controllerAsset(mode.assetName, aspect: 1.26) { size in
-                faceHotspot("zr", x: 0.652, y: 0.216, in: size)
-                faceHotspot("r", x: 0.663, y: 0.538, in: size)
+            if controllerSide == .right {
+                controllerAsset(mode.assetName(for: controllerSide), aspect: 1.26) { size in
+                    faceHotspot("zr", x: 0.652, y: 0.216, in: size)
+                    faceHotspot("r", x: 0.663, y: 0.538, in: size)
+                }
+            } else {
+                controllerAsset(mode.assetName(for: controllerSide), aspect: 1.26) { size in
+                    faceHotspot("zl", x: 0.348, y: 0.216, in: size)
+                    faceHotspot("l", x: 0.337, y: 0.538, in: size)
+                }
             }
         }
     }
 
     private func stickCompassBackdrop(x: CGFloat, y: CGFloat, in size: CGSize) -> some View {
+        let stickButtonID = controllerSide.stickButtonID
+        let stickDirections = ["up", "down", "left", "right"]
         let isStickActive = {
             if case .stick = selection { return true }
-            if selection == .button("r-stick") { return true }
-            if let h = hoveredHotspot, ["up", "down", "left", "right", "r-stick"].contains(h) { return true }
+            if selection == .button(stickButtonID) { return true }
+            if let h = hoveredHotspot, (stickDirections + [stickButtonID]).contains(h) { return true }
             return false
         }()
 
@@ -290,7 +339,17 @@ struct ControllerIllustrationView: View {
                     .shadow(color: Color.accentColor.opacity(0.5), radius: 5)
                     .frame(width: 16, height: 38)
 
-            case "plus":
+            case "plus", "minus":
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.accentColor.opacity(0.26))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.accentColor, lineWidth: 2)
+                    )
+                    .shadow(color: Color.accentColor.opacity(0.5), radius: 5)
+                    .frame(width: 24, height: 24)
+
+            case "capture":
                 RoundedRectangle(cornerRadius: 6)
                     .fill(Color.accentColor.opacity(0.26))
                     .overlay(
@@ -313,7 +372,7 @@ struct ControllerIllustrationView: View {
                 }
                 .shadow(color: Color.accentColor.opacity(0.5), radius: 6)
 
-            case "r-stick":
+            case "r-stick", "l-stick":
                 ZStack {
                     Circle()
                         .fill(Color.accentColor.opacity(0.20))
@@ -333,12 +392,19 @@ struct ControllerIllustrationView: View {
                 }
                 .shadow(color: Color.accentColor.opacity(0.5), radius: 6)
 
-            case "r", "zr":
+            case "r", "zr", "l", "zl":
                 Capsule()
                     .fill(Color.accentColor.opacity(0.25))
                     .overlay(Capsule().stroke(Color.accentColor, lineWidth: 2))
                     .shadow(color: Color.accentColor.opacity(0.5), radius: 6)
                     .frame(width: 76, height: 34)
+
+            case "up", "down", "left", "right":
+                Circle()
+                    .fill(Color.accentColor.opacity(0.20))
+                    .overlay(Circle().stroke(Color.accentColor, lineWidth: 2))
+                    .shadow(color: Color.accentColor.opacity(0.5), radius: 5)
+                    .frame(width: 30, height: 30)
 
             default:
                 Circle()
@@ -352,7 +418,10 @@ struct ControllerIllustrationView: View {
     }
 
     private var stickLegend: some View {
-        Text("R 摇杆：↑ / ↓ 滚动当前对话约一页 · ← / → 切换对话；按住 ZR 时 ← / → 改为系统 App 切换")
+        let text = controllerSide == .right
+            ? "R 摇杆：↑ / ↓ 滚动当前对话约一页 · ← / → 切换对话；按住 ZR 时 ← / → 改为系统 App 切换"
+            : "L 摇杆：↑ / ↓ 滚动当前对话约一页 · ← / → 切换对话"
+        return Text(text)
             .font(.caption2)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -394,16 +463,25 @@ struct ControllerIllustrationView: View {
             if isHovered { hoveredHotspot = id } else if hoveredHotspot == id { hoveredHotspot = nil }
         }
         .focused($focusedHotspot, equals: id)
-        .accessibilityLabel("R 摇杆 \(id == "up" ? "上" : id == "down" ? "下" : id == "left" ? "左" : "右")方向")
+        .accessibilityLabel("\(controllerSide.stickLabel) \(id == "up" ? "上" : id == "down" ? "下" : id == "left" ? "左" : "右")方向")
         .accessibilityHint("编辑此方向的 Codex 映射")
-        .help("编辑 R 摇杆 \(id) 映射")
+        .help("编辑 \(controllerSide.stickLabel) \(id) 映射")
     }
 
     private func hotspotTitle(_ id: String) -> String {
         switch id {
         case "plus": "+"
+        case "minus": "-"
         case "r-stick": "R 摇杆"
+        case "l-stick": "L 摇杆"
         case "home": "Home"
+        case "capture": "Capture"
+        case "l": "L"
+        case "zl": "ZL"
+        case "up": controllerSide == .left ? "D-Pad ↑" : id.uppercased()
+        case "down": controllerSide == .left ? "D-Pad ↓" : id.uppercased()
+        case "left": controllerSide == .left ? "D-Pad ←" : id.uppercased()
+        case "right": controllerSide == .left ? "D-Pad →" : id.uppercased()
         default: id.uppercased()
         }
     }

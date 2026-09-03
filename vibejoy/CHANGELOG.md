@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.2
+
+- **左手 Joy-Con 硬件适配 (Left Joy-Con Hardware Support)**：
+  - Python 后端新增内置左手默认方案 `profiles/left_default.toml`（L-Stick 继承 Codex 导航映射，D-Pad / L / ZL / Minus / Capture 预设 `none` 供自定义）；`ensure_profiles_initialized()` 自动创建左手方案文件。
+  - 硬件发现层已就绪：`discover_readers()` 与 `_rediscover_missing()` 原生支持左手，IPC `status` 命令返回实时 `sides` 列表。
+
+- **VibeJoyBar 动态插图自适应 (Adaptive Controller Illustration)**：
+  - 新增 `ActiveControllerSide` 枚举，`VibeJoyProcessService` 新增 `connectedSides: Set<String>` 可观察属性，实时追踪已连接手柄侧。
+  - **三态 UI**：仅右手 → 保持原有布局；仅左手 → 控制面板自动切换为左手插图与按键分组（D-Pad / L / ZL / Minus / Capture / L-Stick）；左右双持 → Header 出现 `[ ◖ 左手 | 右手 ◗ ]` 分段切换卡，两侧配置后台同时生效。
+  - `ControllerIllustrationView` 接收 `controllerSide` 参数，热区布局、肩键胶囊（R/ZR ↔ L/ZL）、摇杆图例全部跟随侧动态切换。
+  - 新增左手正面与肩部插图资源（`left-joycon-front.png` / `left-joycon-shoulder.png`），朝向与真实左手 Joy-Con 物理布局一致（圆弧在左、SL/SR 轨道在右）。
+
 ## 0.9.1
 
 - **方案预设系统 (Profile System)**：

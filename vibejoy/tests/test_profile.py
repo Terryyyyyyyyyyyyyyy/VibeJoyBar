@@ -204,12 +204,13 @@ def test_active_profile_get_and_set(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 def test_list_and_create_and_switch_and_delete_profile(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
 
-    # Initially only default
+    # Initially default and left_default
     profiles = list_profiles()
-    assert len(profiles) == 1
+    assert len(profiles) == 2
     assert profiles[0]["name"] == "default"
     assert profiles[0]["is_default"] is True
     assert profiles[0]["is_active"] is True
+    assert profiles[1]["name"] == "left_default"
 
     # Create new profile from default
     new_path = create_profile("coding")
@@ -223,7 +224,7 @@ def test_list_and_create_and_switch_and_delete_profile(tmp_path: Path, monkeypat
     # List profiles: default should come first, then sorted
     create_profile("alpha")
     profiles = list_profiles()
-    assert [p["name"] for p in profiles] == ["default", "alpha", "coding"]
+    assert [p["name"] for p in profiles] == ["default", "alpha", "coding", "left_default"]
 
     # Switch profile
     switch_profile("coding")

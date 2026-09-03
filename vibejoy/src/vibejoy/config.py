@@ -209,10 +209,31 @@ def read_default_profile() -> str:
         return read_example_config()
 
 
-def ensure_profiles_initialized() -> Path:
-    """Ensure the user profiles directory and default.toml exist.
+def read_default_left_profile() -> str:
+    """Return the bundled left-hand Joy-Con default profile as text."""
+    try:
+        return resources.files("vibejoy").joinpath("profiles/left_default.toml").read_text("utf-8")
+    except (FileNotFoundError, ModuleNotFoundError, TypeError):
+        here = Path(__file__).resolve().parent
+        profile_path = here / DEFAULT_PROFILES_DIR_NAME / "left_default.toml"
+        if profile_path.is_file():
+            return profile_path.read_text("utf-8")
+        # Minimal inline fallback so left-hand config always loads cleanly
+        return (
+            "[profile.left.stick]\n"
+            "up = \"macro:codex_page_up\"\n"
+            "down = \"macro:codex_page_down\"\n"
+            "left = \"macro:codex_previous_thread\"\n"
+            "right = \"macro:codex_next_thread\"\n"
+            "[profile.left.buttons]\n"
+        )
 
-    Creates ~/.config/vibejoy/profiles/default.toml if missing.
+
+def ensure_profiles_initialized() -> Path:
+    """Ensure the user profiles directory and default profiles exist.
+
+    Creates ~/.config/vibejoy/profiles/default.toml and
+    ~/.config/vibejoy/profiles/left_default.toml if missing.
     Returns the Path to default.toml.
     """
     pdir = default_profiles_dir()
@@ -220,6 +241,9 @@ def ensure_profiles_initialized() -> Path:
     default_file = pdir / DEFAULT_PROFILE_FILENAME
     if not default_file.exists():
         default_file.write_text(read_default_profile(), encoding="utf-8")
+    left_default_file = pdir / "left_default.toml"
+    if not left_default_file.exists():
+        left_default_file.write_text(read_default_left_profile(), encoding="utf-8")
     return default_file
 
 

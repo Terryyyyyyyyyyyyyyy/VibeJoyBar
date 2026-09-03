@@ -11,13 +11,31 @@ struct DashboardSidebar: View {
             Divider().padding(.vertical, 12)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    mappingGroup("FACE", icon: "circle.grid.2x2.fill", buttons: ["a", "b", "x", "y"])
-                    mappingGroup("SHOULDER", icon: "rectangle.topthird.inset.filled", buttons: ["r", "zr", "sl", "sr"])
-                    mappingGroup("SYSTEM", icon: "command", buttons: ["plus", "home", "r-stick"])
-                    VStack(alignment: .leading, spacing: 7) {
-                        sectionTitle("CODEX NAVIGATION", icon: "circle.dotted")
-                        ForEach(model.configStore.stickBindings) { binding in
-                            stickRow(binding)
+                    if model.activeControllerSide == .right {
+                        mappingGroup("FACE", icon: "circle.grid.2x2.fill",
+                            buttons: model.configStore.bindings.filter { ["a","b","x","y"].contains($0.button) }.map(\.button))
+                        mappingGroup("SHOULDER", icon: "rectangle.topthird.inset.filled",
+                            buttons: model.configStore.bindings.filter { ["r","zr","sl","sr"].contains($0.button) }.map(\.button))
+                        mappingGroup("SYSTEM", icon: "command",
+                            buttons: model.configStore.bindings.filter { ["plus","home","r-stick"].contains($0.button) }.map(\.button))
+                        VStack(alignment: .leading, spacing: 7) {
+                            sectionTitle("CODEX NAVIGATION", icon: "circle.dotted")
+                            ForEach(model.configStore.stickBindings) { binding in
+                                stickRow(binding)
+                            }
+                        }
+                    } else {
+                        mappingGroup("D-PAD (方向键)", icon: "dpad.fill",
+                            buttons: ["right", "down", "up", "left"].filter { btn in model.configStore.leftBindings.contains { $0.button == btn } })
+                        mappingGroup("SHOULDER", icon: "rectangle.topthird.inset.filled",
+                            buttons: ["l", "zl", "sl", "sr"].filter { btn in model.configStore.leftBindings.contains { $0.button == btn } })
+                        mappingGroup("SYSTEM", icon: "command",
+                            buttons: ["minus", "capture", "l-stick"].filter { btn in model.configStore.leftBindings.contains { $0.button == btn } })
+                        VStack(alignment: .leading, spacing: 7) {
+                            sectionTitle("CODEX NAVIGATION", icon: "circle.dotted")
+                            ForEach(model.configStore.leftStickBindings) { binding in
+                                stickRow(binding)
+                            }
                         }
                     }
                 }
@@ -95,7 +113,7 @@ struct DashboardSidebar: View {
                 .frame(width: 30, height: 30)
                 .background(statusColor.opacity(0.12), in: Circle())
             VStack(alignment: .leading, spacing: 2) {
-                Text("右 Joy-Con").font(.headline)
+                Text(model.activeControllerSide.displayName).font(.headline)
                 Text(model.processService.phase.title).font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
@@ -113,7 +131,10 @@ struct DashboardSidebar: View {
     }
 
     private func mappingRow(_ button: String) -> some View {
-        let item = model.configStore.bindings.first(where: { $0.button == button })
+        let bindings = model.activeControllerSide == .right
+            ? model.configStore.bindings
+            : model.configStore.leftBindings
+        let item = bindings.first(where: { $0.button == button })
         let selected = selection == .button(button)
         return Button {
             selection = .button(button)

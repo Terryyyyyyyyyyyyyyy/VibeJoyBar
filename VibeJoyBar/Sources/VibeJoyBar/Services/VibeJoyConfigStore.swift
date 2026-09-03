@@ -17,10 +17,13 @@ enum VibeJoyConfigError: LocalizedError {
 @Observable
 final class VibeJoyConfigStore {
     static let knownButtons = ["a", "b", "x", "y", "r", "zr", "plus", "home", "r-stick", "sl", "sr"]
+    static let knownLeftButtons = ["right", "down", "up", "left", "l", "zl", "minus", "capture", "l-stick", "sl", "sr"]
     static let knownStickDirections = ["up", "down", "left", "right"]
 
     private(set) var bindings: [ButtonBinding] = []
     private(set) var stickBindings: [StickBinding] = []
+    private(set) var leftBindings: [ButtonBinding] = []
+    private(set) var leftStickBindings: [StickBinding] = []
     private(set) var deadzone: Double = 0.35
     private(set) var sourceText = ""
     private(set) var hasUnsavedChanges = false
@@ -47,11 +50,19 @@ final class VibeJoyConfigStore {
             let sticks = Self.parseSection("profile.right.stick", from: text)
             bindings = Self.knownButtons.map { ButtonBinding(button: $0, action: buttons[$0] ?? "none") }
             stickBindings = Self.knownStickDirections.map { StickBinding(direction: $0, action: sticks[$0] ?? "none") }
+
+            let leftButtons = Self.parseSection("profile.left.buttons", from: text)
+            let leftSticks = Self.parseSection("profile.left.stick", from: text)
+            leftBindings = Self.knownLeftButtons.map { ButtonBinding(button: $0, action: leftButtons[$0] ?? "none") }
+            leftStickBindings = Self.knownStickDirections.map { StickBinding(direction: $0, action: leftSticks[$0] ?? "none") }
+
             deadzone = Self.parseDeadzone(from: text) ?? 0.35
             hasUnsavedChanges = false; errorMessage = nil
         } catch {
             bindings = Self.knownButtons.map { ButtonBinding(button: $0, action: "none") }
             stickBindings = Self.knownStickDirections.map { StickBinding(direction: $0, action: "none") }
+            leftBindings = Self.knownLeftButtons.map { ButtonBinding(button: $0, action: "none") }
+            leftStickBindings = Self.knownStickDirections.map { StickBinding(direction: $0, action: "none") }
             errorMessage = "无法读取配置：\(error.localizedDescription)"
         }
         refreshProfiles()
@@ -98,19 +109,35 @@ final class VibeJoyConfigStore {
 
     func setAction(_ action: String, at index: Int) { guard bindings.indices.contains(index) else { return }; bindings[index].action = action; hasUnsavedChanges = true }
     func setStickAction(_ action: String, at index: Int) { guard stickBindings.indices.contains(index) else { return }; stickBindings[index].action = action; hasUnsavedChanges = true }
+    func setLeftAction(_ action: String, at index: Int) { guard leftBindings.indices.contains(index) else { return }; leftBindings[index].action = action; hasUnsavedChanges = true }
+    func setLeftStickAction(_ action: String, at index: Int) { guard leftStickBindings.indices.contains(index) else { return }; leftStickBindings[index].action = action; hasUnsavedChanges = true }
     func setDeadzone(_ value: Double) { deadzone = min(max(value, 0), 0.95); hasUnsavedChanges = true }
 
-    func action(for selection: MappingSelection) -> String {
+    func action(for selection: MappingSelection, side: ActiveControllerSide = .right) -> String {
         switch selection {
-        case let .button(button): bindings.first(where: { $0.button == button })?.action ?? "none"
-        case let .stick(direction): stickBindings.first(where: { $0.direction == direction })?.action ?? "none"
+        case let .button(button):
+            let list = (side == .right ? bindings : leftBindings)
+            return list.first(where: { $0.button == button })?.action ?? "none"
+        case let .stick(direction):
+            let list = (side == .right ? stickBindings : leftStickBindings)
+            return list.first(where: { $0.direction == direction })?.action ?? "none"
         }
     }
 
-    func setAction(_ action: String, for selection: MappingSelection) {
+    func setAction(_ action: String, for selection: MappingSelection, side: ActiveControllerSide = .right) {
         switch selection {
-        case let .button(button): if let index = bindings.firstIndex(where: { $0.button == button }) { setAction(action, at: index) }
-        case let .stick(direction): if let index = stickBindings.firstIndex(where: { $0.direction == direction }) { setStickAction(action, at: index) }
+        case let .button(button):
+            if side == .right {
+                if let index = bindings.firstIndex(where: { $0.button == button }) { setAction(action, at: index) }
+            } else {
+                if let index = leftBindings.firstIndex(where: { $0.button == button }) { setLeftAction(action, at: index) }
+            }
+        case let .stick(direction):
+            if side == .right {
+                if let index = stickBindings.firstIndex(where: { $0.direction == direction }) { setStickAction(action, at: index) }
+            } else {
+                if let index = leftStickBindings.firstIndex(where: { $0.direction == direction }) { setLeftStickAction(action, at: index) }
+            }
         }
     }
 
@@ -121,6 +148,12 @@ final class VibeJoyConfigStore {
         let sticks = Dictionary(uniqueKeysWithValues: stickBindings.map { ($0.direction, normalizedAction($0.action)) })
         text = Self.renderSection("profile.right.buttons", entries: buttons, keys: Self.knownButtons, in: text)
         text = Self.renderSection("profile.right.stick", entries: sticks, keys: Self.knownStickDirections, in: text)
+
+        let leftButtons = Dictionary(uniqueKeysWithValues: leftBindings.map { ($0.button, normalizedAction($0.action)) })
+        let leftSticks = Dictionary(uniqueKeysWithValues: leftStickBindings.map { ($0.direction, normalizedAction($0.action)) })
+        text = Self.renderSection("profile.left.buttons", entries: leftButtons, keys: Self.knownLeftButtons, in: text)
+        text = Self.renderSection("profile.left.stick", entries: leftSticks, keys: Self.knownStickDirections, in: text)
+
         return Self.renderDeadzone(deadzone, in: text)
     }
 
@@ -316,19 +349,23 @@ final class VibeJoyConfigStore {
     # ─────────── Left Joy-Con (only used if paired) ───────────
 
     [profile.left.buttons]
-    a       = "tap:enter"
-    b       = "tap:escape"
-    l       = "combo:cmd+tab"
-    zl      = "hold:cmd"
-    minus   = "combo:cmd+z"
-    capture = "combo:cmd+shift+3"           # macOS screenshot
-    "l-stick" = "tap:tab"
+    right   = "tap:enter"
+    down    = "tap:escape"
+    up      = "combo:option+0"
+    left    = "combo:option+1"
+    l       = "combo:option+2"
+    zl      = "app_switcher:system"
+    minus   = "combo:cmd+s"
+    capture = "window_switch:com.openai.codex"
+    "l-stick" = "none"
+    sl      = "none"
+    sr      = "none"
 
     [profile.left.stick]
-    up      = "none"
-    down    = "none"
-    left    = "none"
-    right   = "none"
+    up      = "macro:codex_page_up"
+    down    = "macro:codex_page_down"
+    left    = "macro:codex_previous_thread"
+    right   = "macro:codex_next_thread"
 
     # ─────────── Macros ───────────
 
@@ -361,6 +398,8 @@ final class VibeJoyConfigStore {
 
     static func parseRightButtons(from text: String) -> [String: String] { parseSection("profile.right.buttons", from: text) }
     static func parseRightStick(from text: String) -> [String: String] { parseSection("profile.right.stick", from: text) }
+    static func parseLeftButtons(from text: String) -> [String: String] { parseSection("profile.left.buttons", from: text) }
+    static func parseLeftStick(from text: String) -> [String: String] { parseSection("profile.left.stick", from: text) }
 
     static func parseDeadzone(from text: String) -> Double? {
         guard let lines = sectionLines("global", from: text) else { return nil }
@@ -426,6 +465,43 @@ final class VibeJoyConfigStore {
                 lines.append("steps = [\"\(step)\"]")
             }
         }
+
+        if let header = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines) == "[profile.left.buttons]" }) {
+            let end = lines[(header + 1)...].firstIndex(where: { let value = $0.trimmingCharacters(in: .whitespacesAndNewlines); return value.hasPrefix("[") && value.hasSuffix("]") }) ?? lines.endIndex
+            let sectionLines = lines[(header + 1)..<end]
+            let keys = Set(sectionLines.compactMap { bindingKey(in: $0) })
+            if keys.contains("a") || keys.contains("b") {
+                let defaultLeftLines = [
+                    "right     = \"tap:enter\"",
+                    "down      = \"tap:escape\"",
+                    "up        = \"combo:option+0\"",
+                    "left      = \"combo:option+1\"",
+                    "l         = \"combo:option+2\"",
+                    "zl        = \"app_switcher:system\"",
+                    "minus     = \"combo:cmd+s\"",
+                    "capture   = \"window_switch:com.openai.codex\"",
+                    "\"l-stick\" = \"none\"",
+                    "sl        = \"none\"",
+                    "sr        = \"none\"",
+                ]
+                lines.replaceSubrange((header + 1)..<end, with: defaultLeftLines)
+            }
+        }
+
+        if let header = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines) == "[profile.left.stick]" }) {
+            let end = lines[(header + 1)...].firstIndex(where: { let value = $0.trimmingCharacters(in: .whitespacesAndNewlines); return value.hasPrefix("[") && value.hasSuffix("]") }) ?? lines.endIndex
+            let leftStickDefaults = [
+                "up": "macro:codex_page_up",
+                "down": "macro:codex_page_down",
+                "left": "macro:codex_previous_thread",
+                "right": "macro:codex_next_thread",
+            ]
+            for index in (header + 1)..<end {
+                guard let key = bindingKey(in: lines[index]), let value = bindingValue(in: lines[index]), value == "none", let action = leftStickDefaults[key] else { continue }
+                lines[index] = replacingValue(in: lines[index], with: action)
+            }
+        }
+
         return lines.joined(separator: "\n")
     }
 

@@ -330,4 +330,33 @@ final class VibeJoyConfigStoreTests: XCTestCase {
         // Deleting non-existent profile throws
         XCTAssertThrowsError(try store.deleteProfile(named: "temp_profile"))
     }
+
+    @MainActor
+    func testParsesAndRendersLeftBindings() throws {
+        let source = """
+        [global]
+        poll_hz = 100
+
+        [profile.left.buttons]
+        minus = "combo:cmd+z"
+        capture = "combo:cmd+shift+3"
+
+        [profile.left.stick]
+        up = "macro:codex_page_up"
+        """
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try source.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = VibeJoyConfigStore(configURL: url)
+        XCTAssertEqual(store.action(for: .button("minus"), side: .left), "combo:cmd+z")
+        XCTAssertEqual(store.action(for: .button("capture"), side: .left), "combo:cmd+shift+3")
+        XCTAssertEqual(store.action(for: .stick("up"), side: .left), "macro:codex_page_up")
+
+        store.setAction("tap:enter", for: .button("l"), side: .left)
+        let rendered = try store.renderedText()
+        XCTAssertTrue(rendered.contains("[profile.left.buttons]"))
+        XCTAssertTrue(rendered.contains("minus = \"combo:cmd+z\""))
+        XCTAssertTrue(rendered.contains("l         = \"tap:enter\""))
+    }
 }
