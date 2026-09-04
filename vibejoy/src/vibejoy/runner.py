@@ -280,8 +280,18 @@ def _start_control_server(
 
         if request.cmd == "status":
             live_readers = [r for r in readers if r.is_connected]
+            controllers_status = {}
+            for r in live_readers:
+                bat = r.get_battery()
+                controllers_status[r.side] = {
+                    "level": bat["level"],
+                    "percentage": bat["percentage"],
+                    "charging": bat["charging"],
+                    "battery": bat,
+                }
             return {
                 "sides": sorted(r.side for r in live_readers),
+                "controllers": controllers_status,
                 "calibration": {
                     r.side: None
                     if r.calibration is None or not r.is_connected

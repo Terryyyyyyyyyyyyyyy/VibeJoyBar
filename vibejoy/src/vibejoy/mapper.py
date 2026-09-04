@@ -330,17 +330,17 @@ class Mapper:
     def _on_stick(self, event: StickEvent) -> None:
         stick_id = _stick_id(event.side)
 
-        # While ZR is held, the right stick exclusively navigates the native
-        # Cmd+Tab switcher. Ordinary right-stick mappings must not compete
+        # While ZR or ZL is held, the stick exclusively navigates the native
+        # Cmd+Tab switcher. Ordinary stick mappings must not compete
         # with it, including on the center transition.
-        if event.side == "right" and self._state.app_switcher_active:
+        if self._state.app_switcher_active:
             self._release_stick(stick_id, side=event.side)
             if event.direction in ("right", "left"):
                 # Emit the first Tab immediately.
                 if event.direction == "right":
                     self._keyboard.tap_with_modifiers("tab", ("cmd",))
                 else:
-                    # Cmd is already held by ZR. Include both flags on Tab;
+                    # Cmd is already held by ZR/ZL. Include both flags on Tab;
                     # KeyboardOutput.combo would temporarily release Cmd and
                     # commit the switcher selection.
                     self._keyboard.tap_with_modifiers("tab", ("cmd", "shift"))
@@ -455,8 +455,9 @@ class Mapper:
         if self._state.app_switcher_active:
             return
         # Clear any prior directional hold before taking ownership of the
-        # right stick. Cmd remains held until ZR release.
+        # stick. Cmd remains held until ZR/ZL release.
         self._release_stick(_stick_id("right"), side="right")
+        self._release_stick(_stick_id("left"), side="left")
         self._keyboard.press("cmd")
         self._keyboard.tap_with_modifiers("tab", ("cmd",))
         self._state.app_switcher_active = True

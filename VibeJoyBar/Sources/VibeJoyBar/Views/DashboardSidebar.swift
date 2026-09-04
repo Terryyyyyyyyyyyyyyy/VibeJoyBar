@@ -113,7 +113,18 @@ struct DashboardSidebar: View {
                 .frame(width: 30, height: 30)
                 .background(statusColor.opacity(0.12), in: Circle())
             VStack(alignment: .leading, spacing: 2) {
-                Text(model.activeControllerSide.displayName).font(.headline)
+                HStack(spacing: 6) {
+                    Text(model.activeControllerSide.displayName).font(.headline)
+                    if let bat = model.activeBattery {
+                        HStack(spacing: 3) {
+                            Image(systemName: bat.symbolName)
+                                .font(.system(size: 11))
+                            Text("\(bat.percentage)%")
+                                .font(.caption2.weight(.medium))
+                        }
+                        .foregroundStyle(bat.isLowBattery ? .red : (bat.isCharging ? .green : .secondary))
+                    }
+                }
                 Text(model.processService.phase.title).font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)

@@ -41,9 +41,39 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section("关于") {
+                LabeledContent("应用版本") {
+                    Text("v\(appVersion) (\(appBuild))")
+                        .foregroundStyle(.secondary)
+                }
+                LabeledContent("Python 内核") {
+                    Text("vibejoy 0.9.3")
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .formStyle(.grouped)
-        .frame(width: 560, height: 390)
+        .frame(width: 560, height: 460)
         .padding()
+        .onAppear {
+            NSApp.activate(ignoringOtherApps: true)
+            DispatchQueue.main.async {
+                for window in NSApp.windows where window.canBecomeMain || window.canBecomeKey {
+                    if window.title.contains("设置") || window.title.contains("Settings") {
+                        window.makeKeyAndOrderFront(nil)
+                        window.orderFrontRegardless()
+                    }
+                }
+            }
+        }
+    }
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.9.3"
+    }
+
+    private var appBuild: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "4"
     }
 }

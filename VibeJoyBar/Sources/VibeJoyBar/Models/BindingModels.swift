@@ -91,19 +91,19 @@ enum MappingSelection: Hashable {
 enum MappingDefaults {
     static func action(for selection: MappingSelection) -> String {
         switch selection {
-        case .button("a"): "tap:enter"
-        case .button("b"): "tap:escape"
-        case .button("x"): "combo:option+0"
-        case .button("y"): "combo:option+1"
-        case .button("r"): "combo:option+2"
-        case .button("zr"): "app_switcher:system"
-        case .button("plus"): "combo:cmd+s"
-        case .button("home"): "window_switch:com.openai.codex"
+        case .button("a"), .button("right"): "tap:enter"
+        case .button("b"), .button("down"): "tap:escape"
+        case .button("x"), .button("up"): "combo:option+0"
+        case .button("y"), .button("left"): "combo:option+1"
+        case .button("r"), .button("l"): "combo:option+2"
+        case .button("zr"), .button("zl"): "app_switcher:system"
+        case .button("plus"), .button("minus"): "combo:cmd+s"
+        case .button("home"), .button("capture"): "window_switch:com.openai.codex"
         case .stick("up"): "macro:codex_page_up"
         case .stick("down"): "macro:codex_page_down"
         case .stick("left"): "macro:codex_previous_thread"
         case .stick("right"): "macro:codex_next_thread"
-        case .button("r-stick"), .button("sl"), .button("sr"): "none"
+        case .button("r-stick"), .button("l-stick"), .button("sl"), .button("sr"): "none"
         case .stick: "none"
         case .button: "none"
         }
@@ -148,6 +148,29 @@ enum ActiveControllerSide: String, CaseIterable, Hashable {
     var displayName: String { self == .right ? "右 Joy-Con" : "左 Joy-Con" }
     var stickLabel: String  { self == .right ? "R 摇杆" : "L 摇杆" }
     var stickButtonID: String { self == .right ? "r-stick" : "l-stick" }
+}
+
+struct ControllerBattery: Equatable, Sendable {
+    let level: Int
+    let percentage: Int
+    let isCharging: Bool
+
+    var symbolName: String {
+        if isCharging {
+            return "battery.100.bolt"
+        }
+        switch percentage {
+        case 88...100: return "battery.100"
+        case 63..<88:  return "battery.75"
+        case 38..<63:  return "battery.50"
+        case 13..<38:  return "battery.25"
+        default:       return "battery.0"
+        }
+    }
+
+    var isLowBattery: Bool {
+        percentage <= 20 && !isCharging
+    }
 }
 
 enum VibeJoyPhase: Equatable {

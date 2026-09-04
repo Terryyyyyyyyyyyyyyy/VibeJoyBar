@@ -159,24 +159,24 @@ struct ControllerIllustrationView: View {
                 // Left Joy-Con front: rounded edge on LEFT, rail on RIGHT
                 // L-Stick upper, D-Pad lower, Minus top, Capture bottom
                 controllerAsset(mode.assetName(for: controllerSide), aspect: 0.40) { size in
-                    // L-Stick area (upper region) — mirrored x from right-hand stick coords
-                    stickCompassBackdrop(x: 0.400, y: 0.280, in: size)
-                    faceHotspot("l-stick", x: 0.400, y: 0.280, in: size)
-                    stickDirectionHotspot("up",    symbol: "arrow.up",    x: 0.400, y: 0.208, in: size)
-                    stickDirectionHotspot("left",  symbol: "arrow.left",  x: 0.258, y: 0.280, in: size)
-                    stickDirectionHotspot("right", symbol: "arrow.right", x: 0.542, y: 0.280, in: size)
-                    stickDirectionHotspot("down",  symbol: "arrow.down",  x: 0.400, y: 0.352, in: size)
-                    // Minus (top-right area, near rail) and Capture (bottom center)
-                    faceHotspot("minus",   x: 0.442, y: 0.132, in: size)
-                    faceHotspot("capture", x: 0.400, y: 0.780, in: size)
-                    // D-Pad (lower region, center-left)
-                    faceHotspot("up",    x: 0.380, y: 0.530, in: size)
-                    faceHotspot("down",  x: 0.380, y: 0.672, in: size)
-                    faceHotspot("left",  x: 0.238, y: 0.601, in: size)
-                    faceHotspot("right", x: 0.522, y: 0.601, in: size)
-                    // Rail buttons — on the RIGHT side now
-                    faceHotspot("sl", x: 0.842, y: 0.290, in: size)
-                    faceHotspot("sr", x: 0.842, y: 0.660, in: size)
+                    // L-Stick area (upper region)
+                    stickCompassBackdrop(x: 0.461, y: 0.302, in: size)
+                    faceHotspot("l-stick", x: 0.461, y: 0.302, in: size)
+                    stickDirectionHotspot("up",    symbol: "arrow.up",    x: 0.461, y: 0.230, in: size)
+                    stickDirectionHotspot("left",  symbol: "arrow.left",  x: 0.319, y: 0.302, in: size)
+                    stickDirectionHotspot("right", symbol: "arrow.right", x: 0.603, y: 0.302, in: size)
+                    stickDirectionHotspot("down",  symbol: "arrow.down",  x: 0.461, y: 0.374, in: size)
+                    // Minus (top-right area, near rail) and Capture (bottom right of D-pad)
+                    faceHotspot("minus",   x: 0.737, y: 0.114, in: size)
+                    faceHotspot("capture", x: 0.512, y: 0.724, in: size)
+                    // D-Pad (lower region)
+                    faceHotspot("up",    x: 0.445, y: 0.511, in: size)
+                    faceHotspot("down",  x: 0.412, y: 0.630, in: size)
+                    faceHotspot("left",  x: 0.281, y: 0.587, in: size)
+                    faceHotspot("right", x: 0.555, y: 0.566, in: size)
+                    // Rail buttons — on the RIGHT rail
+                    faceHotspot("sl", x: 0.884, y: 0.289, in: size)
+                    faceHotspot("sr", x: 0.887, y: 0.688, in: size)
                 }
             }
         } else {
@@ -187,8 +187,8 @@ struct ControllerIllustrationView: View {
                 }
             } else {
                 controllerAsset(mode.assetName(for: controllerSide), aspect: 1.26) { size in
-                    faceHotspot("zl", x: 0.348, y: 0.216, in: size)
-                    faceHotspot("l", x: 0.337, y: 0.538, in: size)
+                    faceHotspot("zl", x: 0.380, y: 0.215, in: size)
+                    faceHotspot("l", x: 0.369, y: 0.538, in: size)
                 }
             }
         }

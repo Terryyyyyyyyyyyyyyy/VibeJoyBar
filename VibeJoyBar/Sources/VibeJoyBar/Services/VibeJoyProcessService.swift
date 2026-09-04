@@ -8,6 +8,7 @@ final class VibeJoyProcessService {
     private(set) var phase: VibeJoyPhase = .stopped
     private(set) var logLines: [String] = []
     private(set) var connectedSides: Set<String> = []
+    private(set) var batteries: [ActiveControllerSide: ControllerBattery] = [:]
     private(set) var desiredRunning = false
     var projectURL: URL
     var uvURL: URL
@@ -21,10 +22,12 @@ final class VibeJoyProcessService {
     private var restartRequested = false
 
     init(projectURL: URL, uvURL: URL) { self.projectURL = projectURL; self.uvURL = uvURL }
+    func battery(for side: ActiveControllerSide) -> ControllerBattery? { batteries[side] }
     func start() { desiredRunning = true; prepareExclusiveLaunch() }
 
     func stop() {
         desiredRunning = false; restartRequested = false
+        batteries.removeAll()
         retryTask?.cancel(); retryTask = nil; launchPreparationTask?.cancel(); launchPreparationTask = nil; stopTask?.cancel()
         appendLog("正在请求 VibeJoy 优雅停止…")
         stopTask = Task { [weak self] in
@@ -41,6 +44,7 @@ final class VibeJoyProcessService {
     func terminateForShutdown() {
         desiredRunning = false
         stopStatusPolling()
+        batteries.removeAll()
         retryTask?.cancel(); launchPreparationTask?.cancel(); stopTask?.cancel()
         let command = resolvedCommand(arguments: ["stop"])
         let request = Process(); let pipe = Pipe()
@@ -135,6 +139,7 @@ final class VibeJoyProcessService {
 
     private func finishStop() {
         stopStatusPolling()
+        batteries.removeAll()
         guard let child = process else { phase = .stopped; appendLog("VibeJoy 已停止。"); return }
         if child.isRunning {
             child.interrupt(); appendLog("已发送停止信号，正在清理后台进程…")
@@ -194,21 +199,42 @@ final class VibeJoyProcessService {
     private func startStatusPolling() {
         statusPollTask?.cancel()
         statusPollTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 2_500_000_000)
                 guard !Task.isCancelled, let self else { break }
-                guard self.desiredRunning, self.process != nil else { continue }
-                let result = await self.runOneShot(arguments: ["status"])
-                guard !Task.isCancelled, result.exitCode == 0 else { continue }
-                if let data = result.output.data(using: .utf8),
-                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let sidesList = json["sides"] as? [String] {
-                    let newSides = Set(sidesList)
-                    if newSides != self.connectedSides {
-                        self.connectedSides = newSides
-                        self.updatePhaseFromConnectedSides()
-                    }
+                guard self.desiredRunning, self.process != nil else {
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                    continue
                 }
+                await self.pollStatusOnce()
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+            }
+        }
+    }
+
+    func pollStatusOnce() async {
+        guard desiredRunning, process != nil else { return }
+        let result = await runOneShot(arguments: ["status"])
+        guard result.exitCode == 0 else { return }
+        if let data = result.output.data(using: .utf8),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let sidesList = json["sides"] as? [String] {
+                let newSides = Set(sidesList)
+                if newSides != self.connectedSides {
+                    self.connectedSides = newSides
+                    self.updatePhaseFromConnectedSides()
+                }
+            }
+            if let controllers = json["controllers"] as? [String: [String: Any]] {
+                var updatedBatteries: [ActiveControllerSide: ControllerBattery] = [:]
+                for (sideKey, info) in controllers {
+                    guard let side = ActiveControllerSide(rawValue: sideKey) else { continue }
+                    let level = (info["level"] as? Int) ?? ((info["battery"] as? [String: Any])?["level"] as? Int) ?? 0
+                    let percentage = (info["percentage"] as? Int) ?? ((info["battery"] as? [String: Any])?["percentage"] as? Int) ?? 0
+                    let charging = (info["charging"] as? Bool) ?? ((info["battery"] as? [String: Any])?["charging"] as? Bool) ?? false
+                    updatedBatteries[side] = ControllerBattery(level: level, percentage: percentage, isCharging: charging)
+                }
+                self.batteries = updatedBatteries
             }
         }
     }
@@ -220,6 +246,7 @@ final class VibeJoyProcessService {
 
     private func handleTermination(code: Int32) {
         stopStatusPolling()
+        batteries.removeAll()
         cleanupPipes(); process = nil
         if desiredRunning {
             if restartRequested { restartRequested = false; phase = .starting; scheduleRetry(afterNanoseconds: 400_000_000); return }

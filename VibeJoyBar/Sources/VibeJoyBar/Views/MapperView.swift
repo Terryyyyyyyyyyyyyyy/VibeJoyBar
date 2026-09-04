@@ -27,6 +27,61 @@ struct MapperView: View {
             JoystickEditorView(model: model, selection: $selection)
                 .frame(width: 540, height: 390)
         }
+        .onAppear {
+            model.refreshStatus()
+            validateSelectionForCurrentSide()
+        }
+        .onChange(of: model.activeControllerSide) { _, _ in
+            validateSelectionForCurrentSide()
+        }
+    }
+
+    private func validateSelectionForCurrentSide() {
+        if model.activeControllerSide == .left {
+            if case .button(let name) = selection {
+                let rightOnlyButtons = ["a", "b", "x", "y", "r", "zr", "plus", "home", "r-stick"]
+                if rightOnlyButtons.contains(name) {
+                    selection = .button("right")
+                }
+            }
+        } else {
+            if case .button(let name) = selection {
+                let leftOnlyButtons = ["left", "right", "up", "down", "l", "zl", "minus", "capture", "l-stick"]
+                if leftOnlyButtons.contains(name) {
+                    selection = .button("a")
+                }
+            }
+        }
+    }
+}
+
+struct BatteryBadgeView: View {
+    let battery: ControllerBattery
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: battery.symbolName)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(tintColor)
+            Text("\(battery.percentage)%")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tintColor)
+            if battery.isCharging {
+                Text("充电中")
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(tintColor.opacity(0.1), in: Capsule())
+        .overlay(Capsule().stroke(tintColor.opacity(0.25), lineWidth: 1))
+    }
+
+    private var tintColor: Color {
+        if battery.isCharging { return .green }
+        if battery.isLowBattery { return .red }
+        return .secondary
     }
 }
 
@@ -44,22 +99,31 @@ struct DashboardHeader: View {
                 Image(systemName: model.processService.phase.symbolName).foregroundStyle(statusColor)
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(model.activeControllerSide.displayName + " 控制器")
-                    .font(.title3.weight(.semibold))
+                HStack(spacing: 8) {
+                    Text(model.activeControllerSide.displayName + " 控制器")
+                        .font(.title3.weight(.semibold))
+                    if let battery = model.activeBattery {
+                        BatteryBadgeView(battery: battery)
+                    }
+                }
                 Text(model.processService.phase.title)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             if model.processService.connectedSides.count > 1 {
+                let leftBat = model.processService.battery(for: .left)
+                let rightBat = model.processService.battery(for: .right)
+                let leftText = "◖ 左手" + (leftBat.map { " \($0.percentage)%" } ?? "")
+                let rightText = (rightBat.map { "\($0.percentage)% " } ?? "") + "右手 ◗"
                 Picker("手柄侧", selection: Binding(
                     get: { model.activeControllerSide },
                     set: { model.activeControllerSide = $0 }
                 )) {
-                    Text("◖ 左手").tag(ActiveControllerSide.left)
-                    Text("右手 ◗").tag(ActiveControllerSide.right)
+                    Text(leftText).tag(ActiveControllerSide.left)
+                    Text(rightText).tag(ActiveControllerSide.right)
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 180)
+                .frame(width: 200)
             }
             Spacer()
 

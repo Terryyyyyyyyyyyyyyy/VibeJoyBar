@@ -359,4 +359,63 @@ final class VibeJoyConfigStoreTests: XCTestCase {
         XCTAssertTrue(rendered.contains("minus = \"combo:cmd+z\""))
         XCTAssertTrue(rendered.contains("l         = \"tap:enter\""))
     }
+
+    func testControllerBatterySymbolNames() {
+        let charging = ControllerBattery(level: 2, percentage: 50, isCharging: true)
+        XCTAssertEqual(charging.symbolName, "battery.100.bolt")
+
+        let bat100 = ControllerBattery(level: 4, percentage: 100, isCharging: false)
+        XCTAssertEqual(bat100.symbolName, "battery.100")
+
+        let bat88 = ControllerBattery(level: 4, percentage: 88, isCharging: false)
+        XCTAssertEqual(bat88.symbolName, "battery.100")
+
+        let bat75 = ControllerBattery(level: 3, percentage: 75, isCharging: false)
+        XCTAssertEqual(bat75.symbolName, "battery.75")
+
+        let bat63 = ControllerBattery(level: 3, percentage: 63, isCharging: false)
+        XCTAssertEqual(bat63.symbolName, "battery.75")
+
+        let bat50 = ControllerBattery(level: 2, percentage: 50, isCharging: false)
+        XCTAssertEqual(bat50.symbolName, "battery.50")
+
+        let bat38 = ControllerBattery(level: 2, percentage: 38, isCharging: false)
+        XCTAssertEqual(bat38.symbolName, "battery.50")
+
+        let bat25 = ControllerBattery(level: 1, percentage: 25, isCharging: false)
+        XCTAssertEqual(bat25.symbolName, "battery.25")
+
+        let bat13 = ControllerBattery(level: 1, percentage: 13, isCharging: false)
+        XCTAssertEqual(bat13.symbolName, "battery.25")
+
+        let bat0 = ControllerBattery(level: 0, percentage: 5, isCharging: false)
+        XCTAssertEqual(bat0.symbolName, "battery.0")
+
+        let batDead = ControllerBattery(level: 0, percentage: 0, isCharging: false)
+        XCTAssertEqual(batDead.symbolName, "battery.0")
+    }
+
+    func testControllerBatteryLowBattery() {
+        let low = ControllerBattery(level: 0, percentage: 5, isCharging: false)
+        XCTAssertTrue(low.isLowBattery)
+
+        let low20 = ControllerBattery(level: 1, percentage: 20, isCharging: false)
+        XCTAssertTrue(low20.isLowBattery)
+
+        let lowCharging = ControllerBattery(level: 0, percentage: 5, isCharging: true)
+        XCTAssertFalse(lowCharging.isLowBattery)
+
+        let normal = ControllerBattery(level: 1, percentage: 25, isCharging: false)
+        XCTAssertFalse(normal.isLowBattery)
+    }
+
+    @MainActor
+    func testActiveControllerSideAutoLock() {
+        let model = AppModel.shared
+        XCTAssertNotNil(model.activeControllerSide)
+        model.activeControllerSide = .left
+        XCTAssertEqual(model.activeControllerSide, .left)
+        model.activeControllerSide = .right
+        XCTAssertEqual(model.activeControllerSide, .right)
+    }
 }

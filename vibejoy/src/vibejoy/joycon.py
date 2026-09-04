@@ -20,7 +20,7 @@ import math
 import time
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 from pyjoycon import JoyCon, get_L_id, get_R_id
 
@@ -140,6 +140,27 @@ class JoyConReader:
         if self._last_report_change_at is None:
             return None
         return max(0.0, self._clock() - self._last_report_change_at)
+
+    def get_battery(self) -> dict[str, Any]:
+        """Return battery status: level (0..4), percentage (0..100), charging (bool)."""
+        if not self._connected:
+            return {"level": 0, "percentage": 0, "charging": False}
+        try:
+            status = self._joycon.get_status()
+            bat = status.get("battery", {}) if isinstance(status, dict) else {}
+            raw_level = int(bat.get("level", 0) or 0)
+            raw_charging = bool(bat.get("charging", 0))
+            level = max(0, min(4, raw_level))
+            percentage_map = {4: 100, 3: 75, 2: 50, 1: 25, 0: 5}
+            percentage = percentage_map.get(level, 0)
+            return {
+                "level": level,
+                "percentage": percentage,
+                "charging": raw_charging,
+            }
+        except Exception as e:
+            logger.debug("%s failed to read battery: %s", self._side, e)
+            return {"level": 0, "percentage": 0, "charging": False}
 
     @property
     def deadzone(self) -> float:

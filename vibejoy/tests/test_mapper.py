@@ -238,7 +238,31 @@ class TestAppSwitcher:
         mapper.on_event(ButtonEvent(side="right", button="zr", pressed=True))
         mapper.release_all()
         assert kbd.events[-1] == ("release_all", None)
-        mapper.on_event(ButtonEvent(side="right", button="zr", pressed=False))
+
+    def test_left_joycon_zl_and_stick_navigates_app_switcher(self, kbd: FakeKeyboard, win: FakeWindow) -> None:
+        mapper = Mapper(
+            _config(
+                left_buttons={"zl": "app_switcher:system"},
+                left_stick={"right": "macro:codex_next_thread", "left": "macro:codex_previous_thread"},
+            ),
+            kbd,
+            win,
+        )
+        mapper.on_event(ButtonEvent(side="left", button="zl", pressed=True))
+        assert kbd.events == [
+            ("press", "cmd"),
+            ("modified_tap", ("tab", ("cmd",))),
+        ]
+        mapper.on_event(StickEvent(side="left", direction="right"))
+        assert kbd.events[-1] == ("modified_tap", ("tab", ("cmd",)))
+
+        mapper.on_event(StickEvent(side="left", direction="left"))
+        assert kbd.events[-1] == ("modified_tap", ("tab", ("cmd", "shift")))
+
+        mapper.on_event(StickEvent(side="left", direction=None))
+        mapper.on_event(ButtonEvent(side="left", button="zl", pressed=False))
+        assert kbd.events[-1] == ("release", "cmd")
+        assert not mapper._state.app_switcher_active
 
 
 class TestReleaseAll:
@@ -416,6 +440,25 @@ class TestAppSwitcherAutoRepeat:
         mapper._state.app_switcher_repeat = _RepeatState(key="right", interval_s=0.0, last_fire=0.0)
         mapper.poll()
         # Should have been cleared immediately since app_switcher_active is False
+        assert mapper._state.app_switcher_repeat is None
+
+    def test_left_stick_held_arms_and_repeats_via_poll(self, kbd: FakeKeyboard, win: FakeWindow) -> None:
+        """Holding left stick right while ZL is held auto-repeats via poll()."""
+        mapper = Mapper(_config(left_buttons={"zl": "app_switcher:system"}), kbd, win)
+        mapper.on_event(ButtonEvent(side="left", button="zl", pressed=True))
+        mapper.on_event(StickEvent(side="left", direction="right"))
+        assert mapper._state.app_switcher_repeat is not None
+        assert mapper._state.app_switcher_repeat_direction == "right"
+
+        tab_count_after_flick = sum(1 for ev, _ in kbd.events if ev == "modified_tap")
+        assert mapper._state.app_switcher_repeat is not None
+        mapper._state.app_switcher_repeat.last_fire -= 0.4
+        mapper.poll()
+        tab_count_after_poll = sum(1 for ev, _ in kbd.events if ev == "modified_tap")
+        assert tab_count_after_poll > tab_count_after_flick
+
+        # Releasing ZL clears repeat
+        mapper.on_event(ButtonEvent(side="left", button="zl", pressed=False))
         assert mapper._state.app_switcher_repeat is None
 
 

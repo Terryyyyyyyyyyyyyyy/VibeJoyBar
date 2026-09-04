@@ -4,9 +4,22 @@ import SwiftUI
 struct MenuBarContentView: View {
     @Bindable var model: AppModel
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         Label(model.processService.phase.title, systemImage: model.processService.phase.symbolName)
+
+        if !model.processService.batteries.isEmpty {
+            Divider()
+            if let left = model.processService.battery(for: .left) {
+                Label("左 Joy-Con: \(left.percentage)%" + (left.isCharging ? " (充电中)" : ""),
+                      systemImage: left.symbolName)
+            }
+            if let right = model.processService.battery(for: .right) {
+                Label("右 Joy-Con: \(right.percentage)%" + (right.isCharging ? " (充电中)" : ""),
+                      systemImage: right.symbolName)
+            }
+        }
 
         Divider()
 
@@ -63,8 +76,8 @@ struct MenuBarContentView: View {
             )
         )
 
-        SettingsLink {
-            Text("设置…")
+        Button("设置…") {
+            activateAndOpenSettings()
         }
 
         Divider()
@@ -78,5 +91,18 @@ struct MenuBarContentView: View {
     private func activateAndOpen(id: String) {
         NSApp.activate(ignoringOtherApps: true)
         openWindow(id: id)
+    }
+
+    private func activateAndOpenSettings() {
+        NSApp.activate(ignoringOtherApps: true)
+        openSettings()
+        DispatchQueue.main.async {
+            for window in NSApp.windows where window.canBecomeMain || window.canBecomeKey {
+                if window.title.contains("设置") || window.title.contains("Settings") {
+                    window.makeKeyAndOrderFront(nil)
+                    window.orderFrontRegardless()
+                }
+            }
+        }
     }
 }

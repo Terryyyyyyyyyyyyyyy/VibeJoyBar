@@ -252,8 +252,16 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
     # 2. Joy-Con presence
     readers = discover_readers()
     if readers:
-        sides = ", ".join(r.side for r in readers)
-        print(f"✓ joycon  connected: {sides}")
+        details: list[str] = []
+        for r in readers:
+            bat = r.get_battery()
+            pct = bat.get("percentage")
+            chg = ", charging" if bat.get("charging") else ""
+            if pct is not None and pct > 0:
+                details.append(f"{r.side} ({pct}%{chg})")
+            else:
+                details.append(r.side)
+        print(f"✓ joycon  connected: {', '.join(details)}")
         for r in readers:
             r.close()
     else:

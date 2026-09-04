@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.3
+
+- **手柄电量实时监测与状态显示 (Real-Time Controller Battery Monitoring)**：
+  - Python 后端：`JoyConReader.get_battery()` 解析 Joy-Con 状态帧中的电量等级（0..4）与充电状态，准确映射为百分比（100%、75%、50%、25%、5%），并具备断连与异常安全降级机制。
+  - IPC 通信层：`status` 指令返回当前各连接手柄的电量字典 `controllers`（含 `level`, `percentage`, `charging`, `battery`）。
+  - CLI 工具：`vibejoy doctor` 在检测手柄时实时打印电量与充电状态（如 `right (100%)`）。
+  - VibeJoyBar 前端：
+    - `ControllerBattery` 数据模型与 SF Symbols 动态图标映射（`battery.100`, `battery.75`, `battery.50`, `battery.25`, `battery.0`, `battery.100.bolt`），电量 $\le 20\%$ 低电量告警。
+    - Dashboard Header 显示当前手柄电量胶囊角标与充电标记，双持分段器支持左/右实时百分比显示。
+    - Dashboard 侧边栏紧凑状态头集成微型电池指示。
+    - macOS 菜单栏常驻图标下拉菜单显示左右 Joy-Con 实时电量及充电状态。
+
 ## 0.9.2
 
 - **左手 Joy-Con 硬件适配 (Left Joy-Con Hardware Support)**：
