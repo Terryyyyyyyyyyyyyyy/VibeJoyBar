@@ -370,11 +370,9 @@ final class VibeJoyConfigStore {
     # ─────────── Macros ───────────
 
     [macro.codex_page_up]
-    if_app  = "com.openai.codex"
     steps   = ["scroll:up@8"]
 
     [macro.codex_page_down]
-    if_app  = "com.openai.codex"
     steps   = ["scroll:down@8"]
 
     [macro.codex_previous_thread]
@@ -451,6 +449,25 @@ final class VibeJoyConfigStore {
                 .replacingOccurrences(of: "[\"tap:page_down\"]", with: "[\"scroll:down@8\"]")
         }
 
+        // Strip if_app from codex_page_up and codex_page_down so scroll gestures work across all apps.
+        var inScrollMacro = false
+        var strippedLines: [String] = []
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed == "[macro.codex_page_up]" || trimmed == "[macro.codex_page_down]" {
+                inScrollMacro = true
+                strippedLines.append(line)
+            } else if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
+                inScrollMacro = false
+                strippedLines.append(line)
+            } else if inScrollMacro && trimmed.hasPrefix("if_app") {
+                continue
+            } else {
+                strippedLines.append(line)
+            }
+        }
+        lines = strippedLines
+
         if migratedStick {
             let macroDefinitions = [
                 ("codex_page_up", "scroll:up@8"),
@@ -461,7 +478,9 @@ final class VibeJoyConfigStore {
             for (name, step) in macroDefinitions where !lines.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines) == "[macro.\(name)]" }) {
                 if !lines.isEmpty, !lines.last!.isEmpty { lines.append("") }
                 lines.append("[macro.\(name)]")
-                lines.append("if_app = \"com.openai.codex\"")
+                if !name.contains("page") {
+                    lines.append("if_app = \"com.openai.codex\"")
+                }
                 lines.append("steps = [\"\(step)\"]")
             }
         }

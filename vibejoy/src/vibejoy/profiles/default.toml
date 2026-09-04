@@ -52,11 +52,9 @@ right   = "macro:codex_next_thread"
 # ─────────── Macros ───────────
 
 [macro.codex_page_up]
-if_app  = "com.openai.codex"
 steps   = ["scroll:up@8"]
 
 [macro.codex_page_down]
-if_app  = "com.openai.codex"
 steps   = ["scroll:down@8"]
 
 [macro.codex_previous_thread]

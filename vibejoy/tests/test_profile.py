@@ -62,7 +62,8 @@ def test_default_profile_loads_and_validates(tmp_path: Path):
 
     assert "codex_page_up" in cfg.macros
     assert cfg.macros["codex_page_up"].steps == ("scroll:up@8",)
-    assert cfg.macros["codex_page_up"].if_app == "com.openai.codex"
+    assert cfg.macros["codex_page_up"].if_app is None  # Universal scroll across all macOS apps
+    assert cfg.macros["codex_previous_thread"].if_app == "com.openai.codex"
 
 
 def test_ensure_profiles_initialized(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
