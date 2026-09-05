@@ -32,3 +32,4 @@ DerivedData/
 *.git_standalone
 *.zip
 xhs_release_0.9/
+scratch/

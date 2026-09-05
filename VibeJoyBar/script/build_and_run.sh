@@ -17,13 +17,15 @@ ICON_SOURCE="$ROOT_DIR/Sources/VibeJoyBar/Resources/AppIcon/AppIcon.icns"
 
 export CLANG_MODULE_CACHE_PATH="$ROOT_DIR/.build/ModuleCache"
 export SWIFTPM_MODULECACHE_OVERRIDE="$ROOT_DIR/.build/ModuleCache"
+export TMPDIR="${TMPDIR:-$ROOT_DIR/.build/tmp}"
+mkdir -p "$TMPDIR" "$CLANG_MODULE_CACHE_PATH"
 
 # Ask only our own previously staged menu-bar app to quit.  Avoid a broad
 # process-name kill, which could terminate an unrelated VibeJoyBar binary.
 osascript -e 'tell application id "com.terry.vibejoybar" to quit' >/dev/null 2>&1 || true
 
-swift build --package-path "$ROOT_DIR"
-BUILD_BINARY="$(swift build --package-path "$ROOT_DIR" --show-bin-path)/$APP_NAME"
+swift build --disable-sandbox --package-path "$ROOT_DIR"
+BUILD_BINARY="$(swift build --disable-sandbox --package-path "$ROOT_DIR" --show-bin-path)/$APP_NAME"
 BUILD_BIN_DIR="$(dirname "$BUILD_BINARY")"
 
 # File Provider metadata can be reattached to bundles stored on Synology
@@ -71,8 +73,8 @@ plutil -insert CFBundleName -string "$APP_NAME" "$STAGED_INFO_PLIST"
 plutil -insert CFBundleDisplayName -string "VibeJoy Bar" "$STAGED_INFO_PLIST"
 plutil -insert CFBundlePackageType -string "APPL" "$STAGED_INFO_PLIST"
 plutil -insert CFBundleIconFile -string "AppIcon.icns" "$STAGED_INFO_PLIST"
-plutil -insert CFBundleShortVersionString -string "0.9.3" "$STAGED_INFO_PLIST"
-plutil -insert CFBundleVersion -string "4" "$STAGED_INFO_PLIST"
+plutil -insert CFBundleShortVersionString -string "0.9.4" "$STAGED_INFO_PLIST"
+plutil -insert CFBundleVersion -string "5" "$STAGED_INFO_PLIST"
 plutil -insert LSMinimumSystemVersion -string "$MIN_SYSTEM_VERSION" "$STAGED_INFO_PLIST"
 plutil -insert LSUIElement -bool true "$STAGED_INFO_PLIST"
 plutil -insert NSPrincipalClass -string "NSApplication" "$STAGED_INFO_PLIST"
@@ -122,7 +124,16 @@ open_app() {
 
 case "$MODE" in
   build|--build)
-    echo "Successfully packaged: $APP_BUNDLE"
+    echo "Successfully packaged: $APP_NAME"
+    ;;
+  install|--install)
+    INSTALL_DIR="/Applications"
+    TARGET_APP="$INSTALL_DIR/$APP_NAME.app"
+    echo "Installing $APP_NAME to $TARGET_APP..."
+    rm -rf "$TARGET_APP"
+    ditto "$APP_BUNDLE" "$TARGET_APP"
+    xattr -cr "$TARGET_APP" >/dev/null 2>&1 || true
+    echo "Successfully installed: $TARGET_APP"
     ;;
   run)
     open_app
@@ -144,7 +155,7 @@ case "$MODE" in
     pgrep -x "$APP_NAME" >/dev/null
     ;;
   *)
-    echo "usage: $0 [run|--debug|--logs|--telemetry|--verify]" >&2
+    echo "usage: $0 [run|build|install|--debug|--logs|--telemetry|--verify]" >&2
     exit 2
     ;;
 esac

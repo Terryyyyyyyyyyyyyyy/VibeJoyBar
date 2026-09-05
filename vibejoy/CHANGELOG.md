@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.9.4
+
+- **虚拟控制器物理按键下陷弹起与摇杆 3D 偏转灵动动效 (Tactile Animations & 3D Analog Stick Deflection)**：
+  - **按键物理下陷阻尼回弹 (Key Travel & Spring Bounce)**：
+    - 新增 `TactileHotspotButtonStyle` 与 `TactileCapsuleButtonStyle`，模拟真实机械微动按键行程；
+    - 针对大面积宽幅按键与圆形按键精准调优，按下时沉入基底槽 4.2~6.5pt，外围投影与光圈紧贴收拢，并触发系统触觉反馈（Haptic Feedback）；
+    - 松开时配合 Apple Spring 阻尼弹簧（`response: 0.22, dampingFraction: 0.52`）拟真回弹复位，且具备 120ms 最小触觉停留保障，告别轻点无感。
+  - **真实左手柄 4 枚独立圆形方向键形态复刻 (Joy-Con L Circular Buttons)**：
+    - 严格遵循任天堂官方 Switch 真机双人分体共享设计规范，彻底纠正十字键错误，无痕重绘红色外壳基底；
+    - 像素级还原 4 枚独立圆形方向键（▲、▼、◀、▶），与右手 A/B/X/Y 呈完全对称菱形布局。
+  - **真实肩部硬件按键解耦与机械下陷沉入深槽 (Shoulder Mechanical Depression)**：
+    - 彻底告别悬浮在按键中间的突兀小胶囊指示器，将整枚真实黑色肩部硬件按键作为独立可交互物理层；
+    - 针对左手（ZL/L）与右手（ZR/R）的不同几何曲面与延伸长度进行独立像素级标定；
+    - 静止状态 100% 还原官方插图且无缝贴合；点击时真实垂直下沉（ZL/ZR 下沉 6.5pt，L/R 下沉 4.8pt）沉入深黑色腔体槽。
+  - **摇杆 3D 偏转与轴向拉伸 (3D Stick Deflection & Perspective Tilt)**：
+    - 新增 `TactilePhysics` 物理动力学引擎，支持最大 14pt 物理偏转阻尼向量限幅、18° 3D 空间透视倾斜矩阵计算与反向光影投射；
+    - 全新 `InteractiveJoyConStickView` 拟真组件：
+      - **机械球窝底座**：76pt 暗黑径向底座，随推杆方向实时逆向拉伸内阴影，呈现真实物理凹窝纵深感；
+      - **Joy-Con 经典摇杆帽**：52pt 哑光防滑橡胶外圈、4 方向物理凸点（Grip Nubs）、凹面指腹槽、高亮微光轮廓；
+      - **手势联动与点击**：支持原生平滑拖拽手势偏转、直接下压点击（Stick Click）伴随同心光环微脉冲与触觉震动反馈；
+      - **环形方向选择器**：集成上下左右 4 轴方向指示热区，按压弹性下陷与实时偏转高亮。
+  - **左/右 Joy-Con 完整协同适配**：
+    - 右手 R-Stick 与左手 L-Stick 自动绑定，精确定位在手柄插图对应的物理摇杆中心，与 Codex 导航映射完美统一。
+
 ## 0.9.3
 
 - **手柄电量实时监测与状态显示 (Real-Time Controller Battery Monitoring)**：

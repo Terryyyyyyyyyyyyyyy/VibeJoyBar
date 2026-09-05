@@ -1,3 +1,3 @@
 """VibeJoy — Joy-Con to macOS keyboard mapper."""
 
-__version__ = "0.9.3"
+__version__ = "0.9.4"
