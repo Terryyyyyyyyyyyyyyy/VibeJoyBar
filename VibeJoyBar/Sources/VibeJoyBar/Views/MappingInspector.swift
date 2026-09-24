@@ -27,6 +27,76 @@ struct MappingInspector: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
 
+        let scope = model.configStore.bindingScope(for: selected, side: model.activeControllerSide)
+        let isRecommendedGlobal = MappingDefaults.isRecommendedGlobalKey(for: selected)
+
+        GroupBox {
+            VStack(alignment: .leading, spacing: 8) {
+                switch scope {
+                case .globalBaseline:
+                    HStack(spacing: 6) {
+                        Text("🌐 全局出厂基准")
+                            .font(.caption.weight(.bold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.secondary.opacity(0.15), in: Capsule())
+                        Spacer()
+                    }
+                    Text("当前正在配置全局基准方案。此处的改动将作为所有子方案的默认底座。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                case .inheritedFromGlobal:
+                    HStack(spacing: 6) {
+                        Text("🔒 继承自全局基准")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.secondary.opacity(0.12), in: Capsule())
+
+                        if isRecommendedGlobal {
+                            Text("推荐全局保持一致")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    Text("当前按键继承自全局方案 (default)，与全局基准保持同步。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                case .profileOverride:
+                    HStack(spacing: 6) {
+                        Text("🎨 本方案专属覆盖")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(Color.accentColor)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.accentColor.opacity(0.15), in: Capsule())
+
+                        Spacer()
+
+                        Button("恢复继承全局") {
+                            model.configStore.resetToGlobalDefault(selection: selected, side: model.activeControllerSide)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    Text("此按键已在当前方案 (\(model.configStore.activeProfileName)) 中单独定制，不再受全局默认值影响。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 2)
+        } label: {
+            Text("按键归属与作用域").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+        }
+
         GroupBox {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {

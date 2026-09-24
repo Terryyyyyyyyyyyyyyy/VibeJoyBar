@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.5
+
+- **前台 App 智能感知与方案自动路由切换 (App-Specific Profile Auto-Routing)**：
+  - **`[meta]` 跨语言配置契约**：在 TOML Schema 中引入 `[meta]` 顶层节，支持定义 `apps = ["com.openai.codex", ...]` 与 `description`，通过 `vibejoy validate` 与 `vibejoy profile list` 原生校验与清晰展示。
+  - **系统级 0% CPU 前台监听**：Swift 界面端新增 `AppRouterService`，基于 macOS 原生 `NSWorkspace.didActivateApplicationNotification` 实现纯事件驱动监听。
+  - **智能防抖与降级路由**：内置 100ms 异步防抖机制，极速 Cmd+Tab 轮播时不卡顿；Bundle ID 与 Localized Name 双重匹配，未命中自动优雅回退到 `default` 通用方案。
+  - **可视化关联工作台 (`AppAssociationSheet`)**：双栏管理当前方案的关联列表，实时罗列 macOS 当前运行中前台图形 App 并附带高保真应用图标与 Bundle ID，支持跨方案冲突感知与从 `/Applications` 任意选取未运行 App。
+  - **全局自动路由开关与状态反馈**：Dashboard 方案菜单与系统顶部菜单栏均支持一键开启/锁定自动路由，并附带动态指示徽标。
+
 ## 0.9.4
 
 - **虚拟控制器物理按键下陷弹起与摇杆 3D 偏转灵动动效 (Tactile Animations & 3D Analog Stick Deflection)**：

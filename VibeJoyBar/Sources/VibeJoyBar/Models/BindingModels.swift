@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 struct ButtonBinding: Identifiable, Equatable {
@@ -108,6 +109,24 @@ enum MappingDefaults {
         case .button: "none"
         }
     }
+
+    static func isRecommendedGlobalKey(for selection: MappingSelection) -> Bool {
+        switch selection {
+        case .button("a"), .button("b"), .button("x"), .button("y"), .button("r"), .button("zr"), .button("plus"),
+             .button("right"), .button("down"), .button("up"), .button("left"), .button("l"), .button("zl"), .button("minus"):
+            return true
+        case .stick("up"), .stick("down"):
+            return true
+        default:
+            return false
+        }
+    }
+}
+
+enum BindingScope {
+    case globalBaseline      // Currently in default.toml
+    case inheritedFromGlobal // In sub-profile, value matches global default
+    case profileOverride     // In sub-profile, custom value overrides global
 }
 
 struct MappingPreset: Identifiable {
@@ -222,6 +241,29 @@ struct ProfileItem: Identifiable, Hashable, Equatable, Sendable {
     let isDefault: Bool
     let isActive: Bool
     let fileURL: URL
+    let targetApps: [String]
 
     var id: String { name }
+
+    init(name: String, isDefault: Bool, isActive: Bool, fileURL: URL, targetApps: [String] = []) {
+        self.name = name
+        self.isDefault = isDefault
+        self.isActive = isActive
+        self.fileURL = fileURL
+        self.targetApps = targetApps
+    }
+}
+
+struct RunningAppItem: Identifiable, Hashable, @unchecked Sendable {
+    let id: String
+    let bundleIdentifier: String
+    let localizedName: String
+    let icon: NSImage?
+
+    init(id: String, bundleIdentifier: String, localizedName: String, icon: NSImage? = nil) {
+        self.id = id
+        self.bundleIdentifier = bundleIdentifier
+        self.localizedName = localizedName
+        self.icon = icon
+    }
 }

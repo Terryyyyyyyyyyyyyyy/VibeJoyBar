@@ -1,5 +1,9 @@
 # VibeJoy — Joy-Con → macOS keyboard mapping.
-# Default Profile (出厂基准方案 v0.9.0)
+# Default Profile (出厂基准方案 v0.9.5)
+
+[meta]
+description = "出厂基准方案"
+apps = []
 
 [global]
 deadzone       = 0.2    # stick radial deadzone, 0..1
@@ -58,12 +62,20 @@ steps   = ["scroll:up@8"]
 steps   = ["scroll:down@8"]
 
 [macro.codex_previous_thread]
-if_app  = "com.openai.codex"
+if_app  = "com.openai.codex, com.microsoft.VSCode, Cursor"
 steps   = ["combo:cmd+shift+["]
 
+[macro."codex_previous_thread@antigravity"]
+if_app  = "com.google.antigravity, Antigravity"
+steps   = ["combo:option+up"]
+
 [macro.codex_next_thread]
-if_app  = "com.openai.codex"
+if_app  = "com.openai.codex, com.microsoft.VSCode, Cursor"
 steps   = ["combo:cmd+shift+]"]
+
+[macro."codex_next_thread@antigravity"]
+if_app  = "com.google.antigravity, Antigravity"
+steps   = ["combo:option+down"]
 
 [macro.claude_focus]
 if_app  = "Visual Studio Code"

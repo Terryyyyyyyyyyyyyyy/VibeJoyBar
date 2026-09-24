@@ -89,6 +89,7 @@ struct DashboardHeader: View {
     @Bindable var model: AppModel
     @State private var showingResetConfirmation = false
     @State private var showingSaveAsSheet = false
+    @State private var showingAppAssociationSheet = false
     @State private var newProfileName = ""
     @State private var showingDeleteConfirmation = false
 
@@ -141,6 +142,11 @@ struct DashboardHeader: View {
                 }
                 Divider()
                 Button {
+                    showingAppAssociationSheet = true
+                } label: {
+                    Label("关联目标应用…", systemImage: "app.badge")
+                }
+                Button {
                     newProfileName = ""
                     showingSaveAsSheet = true
                 } label: {
@@ -158,6 +164,37 @@ struct DashboardHeader: View {
             }
             .menuStyle(.borderedButton)
             .disabled(model.isBusy)
+
+            Button {
+                showingAppAssociationSheet = true
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "app.badge")
+                        .foregroundStyle(model.configStore.targetApps.isEmpty ? .secondary : Color.accentColor)
+                    if model.configStore.targetApps.isEmpty {
+                        Text("关联应用…")
+                    } else {
+                        Text("目标 App (\(model.configStore.targetApps.count))")
+                    }
+                }
+            }
+            .buttonStyle(.bordered)
+            .help("为方案绑定目标前台应用，前台激活时自动路由切换（支持一键勾选当前运行的应用）")
+
+            Button {
+                model.setAutoSwitchEnabled(!model.autoSwitchEnabled)
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.triangle.swap")
+                        .foregroundStyle(model.autoSwitchEnabled ? .green : .secondary)
+                    Text(model.autoSwitchEnabled ? "自动路由: 开" : "自动路由: 关")
+                        .font(.caption.weight(.medium))
+                }
+            }
+            .buttonStyle(.bordered)
+            .help(model.autoSwitchEnabled
+                ? "前台应用感知路由中 (当前前台: \(model.routerService.currentFrontApp ?? "无") → \(model.configStore.activeProfileName))"
+                : "点击开启前台应用感知方案自动路由")
 
             Button(model.processService.desiredRunning ? "停止后台" : "启动后台") {
                 model.processService.desiredRunning ? model.processService.stop() : model.processService.start()
@@ -223,6 +260,9 @@ struct DashboardHeader: View {
                 }
                 .padding(20)
                 .frame(width: 340)
+            }
+            .sheet(isPresented: $showingAppAssociationSheet) {
+                AppAssociationSheet(model: model)
             }
         }
         .padding(.horizontal, 22)

@@ -62,8 +62,13 @@ def test_default_profile_loads_and_validates(tmp_path: Path):
 
     assert "codex_page_up" in cfg.macros
     assert cfg.macros["codex_page_up"].steps == ("scroll:up@8",)
-    assert cfg.macros["codex_page_up"].if_app is None  # Universal scroll across all macOS apps
-    assert cfg.macros["codex_previous_thread"].if_app == "com.openai.codex"
+    assert cfg.macros["codex_previous_thread"].if_app == "com.openai.codex, com.microsoft.VSCode, Cursor"
+    assert "codex_previous_thread@antigravity" in cfg.macros
+    assert cfg.macros["codex_previous_thread@antigravity"].if_app == "com.google.antigravity, Antigravity"
+    assert cfg.macros["codex_previous_thread@antigravity"].steps == ("combo:option+up",)
+    assert "codex_next_thread@antigravity" in cfg.macros
+    assert cfg.macros["codex_next_thread@antigravity"].if_app == "com.google.antigravity, Antigravity"
+    assert cfg.macros["codex_next_thread@antigravity"].steps == ("combo:option+down",)
 
 
 def test_ensure_profiles_initialized(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -308,4 +313,31 @@ def test_cli_profile_current_and_create_and_switch(
     rc = main(["profile", "current"])
     assert rc == 0
     assert capsys.readouterr().out.strip() == "default"
+
+
+def test_list_profiles_includes_apps(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    ensure_profiles_initialized()
+
+    # Create a custom profile with meta apps
+    coding_file = default_profiles_dir() / "coding.toml"
+    coding_file.write_text(
+        '[meta]\ndescription = "Dev"\napps = ["com.apple.dt.Xcode", "Visual Studio Code"]\n'
+        '[global]\n[profile.right.buttons]\n[profile.right.stick]\n',
+        encoding="utf-8",
+    )
+
+    profiles = list_profiles()
+    coding_item = next(p for p in profiles if p["name"] == "coding")
+    assert coding_item["apps"] == ["com.apple.dt.Xcode", "Visual Studio Code"]
+
+    default_item = next(p for p in profiles if p["name"] == "default")
+    assert default_item["apps"] == []
+
+    # Check CLI profile list output
+    rc = main(["profile", "list"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "[apps: com.apple.dt.Xcode, Visual Studio Code]" in out
+    assert "[apps: -]" in out
 

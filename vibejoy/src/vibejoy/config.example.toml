@@ -21,6 +21,10 @@
 #                              fires on both press and release with
 #                              $VIBEJOY_EVENT=pressed|released
 
+[meta]
+description    = "Codex & 常用开发配置"
+apps           = ["com.openai.codex", "Visual Studio Code"]
+
 [global]
 deadzone       = 0.2    # stick radial deadzone, 0..1
 poll_hz        = 100    # polling frequency

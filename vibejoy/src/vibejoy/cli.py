@@ -427,7 +427,9 @@ def cmd_profile(args: argparse.Namespace) -> int:
             bullet = "*" if item["is_active"] else "•"
             baseline = " (factory baseline)" if item["is_default"] else ""
             active = " (active)" if item["is_active"] else ""
-            print(f"  {bullet} {item['name']}{baseline}{active} -> {item['path']}")
+            apps_list = item.get("apps", [])
+            apps_str = f" [apps: {', '.join(apps_list)}]" if apps_list else " [apps: -]"
+            print(f"  {bullet} {item['name']}{baseline}{active}{apps_str} -> {item['path']}")
         return 0
 
     if args.profile_cmd == "current":

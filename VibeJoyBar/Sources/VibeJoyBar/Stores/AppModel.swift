@@ -9,11 +9,22 @@ final class AppModel {
     let processService: VibeJoyProcessService
     let configStore: VibeJoyConfigStore
     let loginItemService = LoginItemService()
+    @ObservationIgnored private(set) lazy var routerService = AppRouterService(model: self)
 
     var projectPath: String
     var configPath: String
     var uvPath: String
     var autoRunOnLaunch: Bool
+    var autoSwitchEnabled: Bool {
+        didSet {
+            defaults.set(autoSwitchEnabled, forKey: AppPaths.autoSwitchKey)
+            if autoSwitchEnabled {
+                routerService.startObserving()
+            } else {
+                routerService.stopObserving()
+            }
+        }
+    }
     var activityMessage = ""
     var isBusy = false
 
@@ -54,11 +65,13 @@ final class AppModel {
         let savedConfigPath = defaults.string(forKey: AppPaths.configKey) ?? AppPaths.defaultConfigPath
         let savedUVPath = defaults.string(forKey: AppPaths.uvKey) ?? AppPaths.defaultUVPath
         let savedAutoRun = defaults.object(forKey: AppPaths.autoRunKey) as? Bool ?? true
+        let savedAutoSwitch = defaults.object(forKey: AppPaths.autoSwitchKey) as? Bool ?? false
 
         projectPath = savedProjectPath
         configPath = savedConfigPath
         uvPath = savedUVPath
         autoRunOnLaunch = savedAutoRun
+        autoSwitchEnabled = savedAutoSwitch
 
         processService = VibeJoyProcessService(
             projectURL: AppPaths.expandedURL(savedProjectPath),
@@ -71,6 +84,13 @@ final class AppModel {
         if autoRunOnLaunch {
             processService.start()
         }
+        if autoSwitchEnabled {
+            routerService.startObserving()
+        }
+    }
+
+    func setAutoSwitchEnabled(_ enabled: Bool) {
+        autoSwitchEnabled = enabled
     }
 
     /// Called whenever connectedSides changes to auto-select the appropriate side.
@@ -161,23 +181,34 @@ final class AppModel {
         }
     }
 
-    func switchToProfile(named name: String) {
+    func switchToProfile(named name: String, isAutoSwitch: Bool = false) {
         guard !isBusy else { return }
         isBusy = true
-        activityMessage = "正在切换到方案 '\(name)'…"
+        activityMessage = isAutoSwitch ? "自动切换到方案 '\(name)'…" : "正在切换到方案 '\(name)'…"
         Task {
             do {
-                try configStore.switchToProfile(named: name)
+                try configStore.switchToProfile(named: name, isAutoSwitch: isAutoSwitch)
                 if processService.desiredRunning {
                     let reloaded = await processService.reload()
-                    activityMessage = reloaded ? "已切换至方案 \(name)（零中断生效）" : "已切换到方案 '\(name)'"
+                    activityMessage = reloaded
+                        ? (isAutoSwitch ? "已自动路由至方案 \(name)" : "已切换至方案 \(name)（零中断生效）")
+                        : "已切换到方案 '\(name)'"
                 } else {
-                    activityMessage = "已切换到方案 '\(name)'"
+                    activityMessage = isAutoSwitch ? "已自动路由至方案 '\(name)'" : "已切换到方案 '\(name)'"
                 }
             } catch {
                 activityMessage = "切换方案失败：\(error.localizedDescription)"
             }
             isBusy = false
+        }
+    }
+
+    func updateTargetApps(for profileName: String, apps: [String]) {
+        do {
+            try configStore.updateTargetApps(for: profileName, apps: apps)
+            activityMessage = "已更新方案 '\(profileName)' 关联应用"
+        } catch {
+            activityMessage = "更新方案关联应用失败：\(error.localizedDescription)"
         }
     }
 

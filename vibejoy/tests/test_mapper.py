@@ -10,7 +10,7 @@ import pytest
 
 from vibejoy.config import Config, GlobalConfig, MacroDef, ProfileConfig
 from vibejoy.events import ButtonEvent, StickEvent
-from vibejoy.mapper import Mapper
+from vibejoy.mapper import Mapper, _macro_guard_passes
 
 # ---------- Fakes ----------
 
@@ -591,3 +591,95 @@ class TestStickScrollAutoRepeat:
         mapper.on_event(ButtonEvent(side="left", button="right", pressed=False))
         assert ("tap", "space") in kbd.events
         assert ("tap", "enter") not in kbd.events
+
+
+def test_macro_guard_passes(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+    from unittest.mock import MagicMock
+
+    mock_app = MagicMock()
+    mock_app.localizedName.return_value = "Google Antigravity"
+    mock_app.bundleIdentifier.return_value = "com.google.antigravity"
+
+    mock_workspace = MagicMock()
+    mock_workspace.frontmostApplication.return_value = mock_app
+
+    fake_appkit = MagicMock()
+    fake_appkit.NSWorkspace.sharedWorkspace.return_value = mock_workspace
+
+    monkeypatch.setitem(sys.modules, "AppKit", fake_appkit)
+
+    # None and empty
+    assert _macro_guard_passes(MacroDef(steps=("tap:a",), if_app=None)) is True
+    assert _macro_guard_passes(MacroDef(steps=("tap:a",), if_app="")) is True
+    assert _macro_guard_passes(MacroDef(steps=("tap:a",), if_app=" , ")) is True
+
+    # Single app matching bundle or name
+    assert _macro_guard_passes(MacroDef(steps=("tap:a",), if_app="com.google.antigravity")) is True
+    assert _macro_guard_passes(MacroDef(steps=("tap:a",), if_app="Antigravity")) is True
+    assert _macro_guard_passes(MacroDef(steps=("tap:a",), if_app="com.openai.codex")) is False
+
+    # Comma-separated multiple apps
+    assert _macro_guard_passes(
+        MacroDef(steps=("tap:a",), if_app="com.openai.codex, com.google.antigravity, Antigravity")
+    ) is True
+    assert _macro_guard_passes(
+        MacroDef(steps=("tap:a",), if_app="com.apple.Safari, Visual Studio Code")
+    ) is False
+
+    # No frontmost app
+    mock_workspace.frontmostApplication.return_value = None
+    assert _macro_guard_passes(MacroDef(steps=("tap:a",), if_app="Antigravity")) is False
+
+
+def test_macro_override_dispatch(
+    kbd: FakeKeyboard, win: FakeWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import sys
+    from unittest.mock import MagicMock
+
+    mock_app = MagicMock()
+    mock_workspace = MagicMock()
+    mock_workspace.frontmostApplication.return_value = mock_app
+    fake_appkit = MagicMock()
+    fake_appkit.NSWorkspace.sharedWorkspace.return_value = mock_workspace
+    monkeypatch.setitem(sys.modules, "AppKit", fake_appkit)
+
+    cfg = _config(
+        right_buttons={"a": "macro:switch_thread"},
+        macros={
+            "switch_thread": MacroDef(
+                steps=("combo:cmd+shift+[",),
+                if_app="com.openai.codex",
+            ),
+            "switch_thread@antigravity": MacroDef(
+                steps=("combo:option+up",),
+                if_app="com.google.antigravity",
+            ),
+        },
+    )
+    mapper = Mapper(cfg, kbd, win)
+
+    # 1. Antigravity active -> selects switch_thread@antigravity
+    mock_app.localizedName.return_value = "Antigravity"
+    mock_app.bundleIdentifier.return_value = "com.google.antigravity"
+    kbd.events.clear()
+    mapper.on_event(ButtonEvent(side="right", button="a", pressed=True))
+    assert ("combo", ("option", "up")) in kbd.events
+    assert ("combo", ("cmd", "shift", "[")) not in kbd.events
+
+    # 2. Codex active -> falls back to base switch_thread
+    mock_app.localizedName.return_value = "Codex"
+    mock_app.bundleIdentifier.return_value = "com.openai.codex"
+    kbd.events.clear()
+    mapper.on_event(ButtonEvent(side="right", button="a", pressed=True))
+    assert ("combo", ("cmd", "shift", "[")) in kbd.events
+    assert ("combo", ("option", "up")) not in kbd.events
+
+    # 3. Unrelated app active -> guard fails, neither runs
+    mock_app.localizedName.return_value = "Safari"
+    mock_app.bundleIdentifier.return_value = "com.apple.Safari"
+    kbd.events.clear()
+    mapper.on_event(ButtonEvent(side="right", button="a", pressed=True))
+    assert len(kbd.events) == 0
+

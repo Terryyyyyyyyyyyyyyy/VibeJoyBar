@@ -25,6 +25,7 @@ final class VibeJoyConfigStore {
     private(set) var leftBindings: [ButtonBinding] = []
     private(set) var leftStickBindings: [StickBinding] = []
     private(set) var deadzone: Double = 0.35
+    private(set) var targetApps: [String] = []
     private(set) var sourceText = ""
     private(set) var hasUnsavedChanges = false
     private(set) var activeProfileName: String = "default"
@@ -57,12 +58,14 @@ final class VibeJoyConfigStore {
             leftStickBindings = Self.knownStickDirections.map { StickBinding(direction: $0, action: leftSticks[$0] ?? "none") }
 
             deadzone = Self.parseDeadzone(from: text) ?? 0.35
+            targetApps = Self.parseTargetApps(from: text)
             hasUnsavedChanges = false; errorMessage = nil
         } catch {
             bindings = Self.knownButtons.map { ButtonBinding(button: $0, action: "none") }
             stickBindings = Self.knownStickDirections.map { StickBinding(direction: $0, action: "none") }
             leftBindings = Self.knownLeftButtons.map { ButtonBinding(button: $0, action: "none") }
             leftStickBindings = Self.knownStickDirections.map { StickBinding(direction: $0, action: "none") }
+            targetApps = []
             errorMessage = "无法读取配置：\(error.localizedDescription)"
         }
         refreshProfiles()
@@ -88,13 +91,15 @@ final class VibeJoyConfigStore {
                 let name = url.deletingPathExtension().lastPathComponent
                 let isDefault = (name == "default")
                 let isActive = (name == currentActive)
-                items.append(ProfileItem(name: name, isDefault: isDefault, isActive: isActive, fileURL: url))
+                let apps = (try? String(contentsOf: url, encoding: .utf8)).map { Self.parseTargetApps(from: $0) } ?? []
+                items.append(ProfileItem(name: name, isDefault: isDefault, isActive: isActive, fileURL: url, targetApps: apps))
             }
         }
 
         if !items.contains(where: { $0.name == "default" }) {
             let defaultURL = profilesDir.appendingPathComponent("default.toml")
-            items.append(ProfileItem(name: "default", isDefault: true, isActive: currentActive == "default", fileURL: defaultURL))
+            let apps = (try? String(contentsOf: defaultURL, encoding: .utf8)).map { Self.parseTargetApps(from: $0) } ?? []
+            items.append(ProfileItem(name: "default", isDefault: true, isActive: currentActive == "default", fileURL: defaultURL, targetApps: apps))
         }
 
         items.sort { a, b in
@@ -141,6 +146,60 @@ final class VibeJoyConfigStore {
         }
     }
 
+    func globalBaselineAction(for selection: MappingSelection, side: ActiveControllerSide = .right) -> String {
+        let profilesDir = configURL.deletingLastPathComponent().appendingPathComponent("profiles")
+        let defaultURL = profilesDir.appendingPathComponent("default.toml")
+
+        if activeProfileName == "default" {
+            switch selection {
+            case let .button(btn):
+                let list = (side == .right ? bindings : leftBindings)
+                return list.first(where: { $0.button == btn })?.action ?? MappingDefaults.action(for: selection)
+            case let .stick(dir):
+                let list = (side == .right ? stickBindings : leftStickBindings)
+                return list.first(where: { $0.direction == dir })?.action ?? MappingDefaults.action(for: selection)
+            }
+        }
+
+        if FileManager.default.fileExists(atPath: defaultURL.path),
+           let text = try? String(contentsOf: defaultURL, encoding: .utf8) {
+            let rightButtons = Self.parseSection("profile.right.buttons", from: text)
+            let rightSticks = Self.parseSection("profile.right.stick", from: text)
+            let leftButtons = Self.parseSection("profile.left.buttons", from: text)
+            let leftSticks = Self.parseSection("profile.left.stick", from: text)
+
+            switch selection {
+            case let .button(btn):
+                let dict = (side == .right ? rightButtons : leftButtons)
+                if let action = dict[btn] {
+                    return action
+                }
+            case let .stick(dir):
+                let dict = (side == .right ? rightSticks : leftSticks)
+                if let action = dict[dir] {
+                    return action
+                }
+            }
+        }
+
+        return MappingDefaults.action(for: selection)
+    }
+
+    func bindingScope(for selection: MappingSelection, side: ActiveControllerSide = .right) -> BindingScope {
+        if activeProfileName == "default" {
+            return .globalBaseline
+        }
+        let current = action(for: selection, side: side)
+        let base = globalBaselineAction(for: selection, side: side)
+        return current == base ? .inheritedFromGlobal : .profileOverride
+    }
+
+    func resetToGlobalDefault(selection: MappingSelection, side: ActiveControllerSide = .right) {
+        let defaultAction = globalBaselineAction(for: selection, side: side)
+        setAction(defaultAction, for: selection, side: side)
+        hasUnsavedChanges = true
+    }
+
     func renderedText() throws -> String {
         guard !sourceText.isEmpty else { throw VibeJoyConfigError.unreadable("当前没有可保存的配置内容") }
         var text = sourceText
@@ -154,7 +213,70 @@ final class VibeJoyConfigStore {
         text = Self.renderSection("profile.left.buttons", entries: leftButtons, keys: Self.knownLeftButtons, in: text)
         text = Self.renderSection("profile.left.stick", entries: leftSticks, keys: Self.knownStickDirections, in: text)
 
-        return Self.renderDeadzone(deadzone, in: text)
+        text = Self.renderDeadzone(deadzone, in: text)
+        return Self.renderTargetApps(targetApps, in: text)
+    }
+
+    func setTargetApps(_ apps: [String]) {
+        targetApps = apps
+        hasUnsavedChanges = true
+    }
+
+    func updateTargetApps(for profileName: String, apps: [String]) throws {
+        let fileManager = FileManager.default
+        let baseDir = configURL.deletingLastPathComponent()
+        let profilesDir = baseDir.appendingPathComponent("profiles")
+        try fileManager.createDirectory(at: profilesDir, withIntermediateDirectories: true)
+        let profileURL = profilesDir.appendingPathComponent("\(profileName).toml")
+
+        let currentText: String
+        if fileManager.fileExists(atPath: profileURL.path) {
+            currentText = try String(contentsOf: profileURL, encoding: .utf8)
+        } else if profileName == "default" {
+            currentText = Self.fallbackDefaultConfig
+        } else {
+            throw VibeJoyConfigError.unreadable("方案不存在：\(profileName)")
+        }
+
+        let updatedText = Self.renderTargetApps(apps, in: currentText)
+        try updatedText.write(to: profileURL, atomically: true, encoding: .utf8)
+
+        let normalizedClaimedApps = Set(apps.map { $0.lowercased() })
+        if let items = try? fileManager.contentsOfDirectory(at: profilesDir, includingPropertiesForKeys: nil) {
+            for item in items where item.pathExtension == "toml" {
+                let otherName = item.deletingPathExtension().lastPathComponent
+                if otherName != profileName {
+                    if let text = try? String(contentsOf: item, encoding: .utf8) {
+                        let existing = Self.parseTargetApps(from: text)
+                        let filtered = existing.filter { !normalizedClaimedApps.contains($0.lowercased()) }
+                        if filtered != existing {
+                            let updatedOther = Self.renderTargetApps(filtered, in: text)
+                            try? updatedOther.write(to: item, atomically: true, encoding: .utf8)
+                            if activeProfileName == otherName {
+                                targetApps = filtered
+                                if fileManager.fileExists(atPath: configURL.path) {
+                                    let activeText = (try? String(contentsOf: configURL, encoding: .utf8)) ?? text
+                                    let updatedActiveText = Self.renderTargetApps(filtered, in: activeText)
+                                    try? updatedActiveText.write(to: configURL, atomically: true, encoding: .utf8)
+                                    sourceText = updatedActiveText
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if activeProfileName == profileName {
+            targetApps = apps
+            if fileManager.fileExists(atPath: configURL.path) {
+                let activeText = (try? String(contentsOf: configURL, encoding: .utf8)) ?? currentText
+                let updatedActiveText = Self.renderTargetApps(apps, in: activeText)
+                try updatedActiveText.write(to: configURL, atomically: true, encoding: .utf8)
+                sourceText = updatedActiveText
+            }
+        }
+        refreshProfiles()
     }
 
     func commit(_ text: String) throws {
@@ -228,7 +350,7 @@ final class VibeJoyConfigStore {
         load()
     }
 
-    func switchToProfile(named name: String) throws {
+    func switchToProfile(named name: String, isAutoSwitch: Bool = false) throws {
         let fileManager = FileManager.default
         let baseDir = configURL.deletingLastPathComponent()
         let profilesDir = baseDir.appendingPathComponent("profiles")
@@ -251,7 +373,9 @@ final class VibeJoyConfigStore {
             throw VibeJoyConfigError.unreadable("方案不存在：\(name)")
         }
 
-        try createBackupOfCurrentConfig()
+        if !isAutoSwitch {
+            try createBackupOfCurrentConfig()
+        }
 
         try fileManager.createDirectory(at: baseDir, withIntermediateDirectories: true)
         try targetText.write(to: configURL, atomically: true, encoding: .utf8)
@@ -317,7 +441,11 @@ final class VibeJoyConfigStore {
 
     static let fallbackDefaultConfig = """
     # VibeJoy — Joy-Con → macOS keyboard mapping.
-    # Default Profile (出厂基准方案 v0.9.0)
+    # Default Profile (出厂基准方案 v0.9.5)
+
+    [meta]
+    description = "出厂基准方案"
+    apps = []
 
     [global]
     deadzone       = 0.2    # stick radial deadzone, 0..1
@@ -613,4 +741,65 @@ final class VibeJoyConfigStore {
     }
 
     private static func escape(_ value: String) -> String { value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"") }
+
+    static func parseTargetApps(from text: String) -> [String] {
+        guard let lines = sectionLines("meta", from: text) else { return [] }
+        for line in lines where bindingKey(in: line) == "apps" {
+            guard let equals = line.firstIndex(of: "=") else { continue }
+            let valuePart = line[line.index(after: equals)...].split(separator: "#", maxSplits: 1).first.map(String.init) ?? ""
+            let trimmed = valuePart.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.hasPrefix("[") {
+                var apps: [String] = []
+                var inQuote = false
+                var escaped = false
+                var currentApp = ""
+                for char in trimmed {
+                    if char == "\"" && !escaped {
+                        if inQuote {
+                            let unescaped = currentApp
+                                .replacingOccurrences(of: "\\\"", with: "\"")
+                                .replacingOccurrences(of: "\\\\", with: "\\")
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                            if !unescaped.isEmpty {
+                                apps.append(unescaped)
+                            }
+                            currentApp = ""
+                            inQuote = false
+                        } else {
+                            inQuote = true
+                        }
+                    } else if inQuote {
+                        if char == "\\" && !escaped {
+                            escaped = true
+                        } else {
+                            currentApp.append(char)
+                            escaped = false
+                        }
+                    }
+                }
+                return apps
+            } else if let single = bindingValue(in: line) {
+                let trimmedSingle = single.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmedSingle.isEmpty ? [] : [trimmedSingle]
+            }
+        }
+        return []
+    }
+
+    static func renderTargetApps(_ apps: [String], in source: String) -> String {
+        let renderedApps = "apps = [" + apps.map { "\"\(escape($0))\"" }.joined(separator: ", ") + "]"
+        var lines = source.components(separatedBy: "\n")
+        guard let header = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines) == "[meta]" }) else {
+            let insertIndex = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines) == "[global]" }) ?? 0
+            lines.insert(contentsOf: ["[meta]", renderedApps, ""], at: insertIndex)
+            return lines.joined(separator: "\n")
+        }
+        let end = lines[(header + 1)...].firstIndex(where: { let value = $0.trimmingCharacters(in: .whitespacesAndNewlines); return value.hasPrefix("[") && value.hasSuffix("]") }) ?? lines.endIndex
+        if let appsIndex = lines[(header + 1)..<end].firstIndex(where: { bindingKey(in: $0) == "apps" }) {
+            lines[appsIndex] = renderedApps
+        } else {
+            lines.insert(renderedApps, at: header + 1)
+        }
+        return lines.joined(separator: "\n")
+    }
 }

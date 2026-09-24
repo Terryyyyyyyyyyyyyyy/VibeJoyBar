@@ -44,6 +44,17 @@ struct MenuBarContentView: View {
         }
 
         Menu("方案预设 (\(model.configStore.activeProfileName))") {
+            Toggle("随前台应用自动切换方案", isOn: Binding(
+                get: { model.autoSwitchEnabled },
+                set: { model.setAutoSwitchEnabled($0) }
+            ))
+
+            if model.autoSwitchEnabled {
+                Label("当前前台: \(model.routerService.currentFrontApp ?? "无") → \(model.configStore.activeProfileName)", systemImage: "arrow.triangle.swap")
+            }
+
+            Divider()
+
             ForEach(model.configStore.availableProfiles) { profile in
                 Button {
                     model.switchToProfile(named: profile.name)

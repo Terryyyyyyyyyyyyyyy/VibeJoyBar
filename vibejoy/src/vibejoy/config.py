@@ -85,12 +85,19 @@ class MacroDef:
 
 
 @dataclass(frozen=True, slots=True)
+class MetaConfig:
+    apps: tuple[str, ...] = ()
+    description: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class Config:
     """Fully parsed and validated configuration."""
 
     global_: GlobalConfig
     profiles: dict[Side, ProfileConfig]
     macros: dict[str, MacroDef]
+    meta: MetaConfig = field(default_factory=MetaConfig)
     source_path: Path | None = None
     """The TOML path this config was loaded from (None if synthesized)."""
 
@@ -156,6 +163,60 @@ def load_config(path: str | Path | None = None) -> Config:
     return cfg
 
 
+def merge_configs(base: Config, override: Config) -> Config:
+    """Merge an override (sub-profile) Config on top of a base (baseline) Config.
+
+    - global_: override values take precedence, falling back to base.
+    - profiles: for each side ('right', 'left'), merges buttons and stick dictionaries.
+    - macros: base macros updated with override macros.
+    - meta: override meta is taken.
+    """
+    default_global = GlobalConfig()
+    merged_global = GlobalConfig(
+        deadzone=(
+            override.global_.deadzone
+            if override.global_.deadzone != default_global.deadzone
+            else base.global_.deadzone
+        ),
+        poll_hz=(
+            override.global_.poll_hz
+            if override.global_.poll_hz != default_global.poll_hz
+            else base.global_.poll_hz
+        ),
+        long_press_ms=(
+            override.global_.long_press_ms
+            if override.global_.long_press_ms != default_global.long_press_ms
+            else base.global_.long_press_ms
+        ),
+        stick_mode=(
+            override.global_.stick_mode
+            if override.global_.stick_mode != default_global.stick_mode
+            else base.global_.stick_mode
+        ),
+    )
+
+    all_sides: set[Side] = set(base.profiles.keys()) | set(override.profiles.keys())
+    merged_profiles: dict[Side, ProfileConfig] = {}
+    for side in all_sides:
+        base_p = base.profiles.get(side, ProfileConfig())
+        override_p = override.profiles.get(side, ProfileConfig())
+        merged_profiles[side] = ProfileConfig(
+            buttons={**base_p.buttons, **override_p.buttons},
+            stick={**base_p.stick, **override_p.stick},
+        )
+
+    merged_macros = {**base.macros, **override.macros}
+    merged_meta = override.meta
+
+    return Config(
+        global_=merged_global,
+        profiles=merged_profiles,
+        macros=merged_macros,
+        meta=merged_meta,
+        source_path=override.source_path or base.source_path,
+    )
+
+
 def validate_config(cfg: Config) -> list[str]:
     """Return a list of human-readable error messages (empty = valid)."""
     errors: list[str] = []
@@ -176,6 +237,10 @@ def validate_config(cfg: Config) -> list[str]:
 
     for name, macro in cfg.macros.items():
         _validate_macro(name, macro, errors)
+
+    for i, app in enumerate(cfg.meta.apps):
+        if not isinstance(app, str) or not app.strip():
+            errors.append(f"meta.apps[{i}] must be a non-empty string")
 
     return errors
 
@@ -320,12 +385,23 @@ def list_profiles() -> list[dict[str, Any]]:
     profiles: list[dict[str, Any]] = []
     for p in pdir.glob("*.toml"):
         name = p.stem
+        apps: list[str] = []
+        try:
+            with p.open("rb") as f:
+                raw = tomllib.load(f)
+            meta_raw = raw.get("meta") or {}
+            if isinstance(meta_raw, dict):
+                meta_cfg = _build_meta(meta_raw)
+                apps = list(meta_cfg.apps)
+        except Exception:
+            pass
         profiles.append(
             {
                 "name": name,
                 "path": p,
                 "is_default": name == "default",
                 "is_active": name == active_name,
+                "apps": apps,
             }
         )
     profiles.sort(key=lambda item: (0 if item["is_default"] else 1, item["name"].lower()))
@@ -408,22 +484,59 @@ def delete_profile(name: str) -> None:
 
 
 def _build_config(raw: dict[str, Any], *, source_path: Path | None) -> Config:
-    unknown_top = set(raw) - {"global", "profile", "macro"}
+    unknown_top = set(raw) - {"global", "profile", "macro", "meta"}
     if unknown_top:
         raise ConfigError(
-            f"unknown top-level section(s): {sorted(unknown_top)}. Known: global, profile, macro"
+            f"unknown top-level section(s): {sorted(unknown_top)}. Known: global, profile, macro, meta"
         )
 
     global_cfg = _build_global(raw.get("global") or {})
     profiles = _build_profiles(raw.get("profile") or {})
     macros = _build_macros(raw.get("macro") or {})
+    meta = _build_meta(raw.get("meta") or {})
 
     return Config(
         global_=global_cfg,
         profiles=profiles,
         macros=macros,
+        meta=meta,
         source_path=source_path,
     )
+
+
+def _build_meta(raw: dict[str, Any]) -> MetaConfig:
+    if not isinstance(raw, dict):
+        raise ConfigError(f"[meta] must be a table, got {type(raw).__name__}")
+    unknown = set(raw) - {"apps", "description"}
+    if unknown:
+        raise ConfigError(f"unknown key(s) in [meta]: {sorted(unknown)}")
+
+    apps_raw = raw.get("apps")
+    if apps_raw is None:
+        apps: tuple[str, ...] = ()
+    elif isinstance(apps_raw, str):
+        cleaned = apps_raw.strip()
+        apps = (cleaned,) if cleaned else ()
+    elif isinstance(apps_raw, (list, tuple)):
+        cleaned_list: list[str] = []
+        for i, item in enumerate(apps_raw):
+            if not isinstance(item, str):
+                raise ConfigError(f"[meta].apps[{i}] must be a string, got {type(item).__name__}")
+            cleaned = item.strip()
+            if cleaned:
+                cleaned_list.append(cleaned)
+        apps = tuple(cleaned_list)
+    else:
+        raise ConfigError(
+            f"[meta].apps must be a list of strings or a string, got {type(apps_raw).__name__}"
+        )
+
+    desc_raw = raw.get("description", "")
+    if not isinstance(desc_raw, str):
+        raise ConfigError(f"[meta].description must be a string, got {type(desc_raw).__name__}")
+    description = desc_raw.strip()
+
+    return MetaConfig(apps=apps, description=description)
 
 
 def _build_global(raw: dict[str, Any]) -> GlobalConfig:

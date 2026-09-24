@@ -36,6 +36,19 @@ struct SettingsView: View {
                 }
             }
 
+            Section("前台应用自动路由") {
+                Toggle(
+                    "随前台应用自动切换方案",
+                    isOn: Binding(
+                        get: { model.autoSwitchEnabled },
+                        set: { model.setAutoSwitchEnabled($0) }
+                    )
+                )
+                Text("当切换前台窗口时，VibeJoy 将自动激活与该应用关联的配置方案；未关联的应用将自动回退到出厂基准方案。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("说明") {
                 Text("菜单栏 App 会在后台管理 VibeJoy，不需要保留终端窗口。手柄未连接时会每 8 秒自动重试。")
                     .font(.caption)
@@ -48,13 +61,13 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 LabeledContent("Python 内核") {
-                    Text("vibejoy 0.9.4")
+                    Text("vibejoy 0.9.5")
                         .foregroundStyle(.secondary)
                 }
             }
         }
         .formStyle(.grouped)
-        .frame(width: 560, height: 460)
+        .frame(width: 560, height: 530)
         .padding()
         .onAppear {
             NSApp.activate(ignoringOtherApps: true)
@@ -70,10 +83,10 @@ struct SettingsView: View {
     }
 
     private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.9.4"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.9.5"
     }
 
     private var appBuild: String {
-        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "5"
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "6"
     }
 }

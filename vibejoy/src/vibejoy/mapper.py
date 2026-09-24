@@ -521,7 +521,17 @@ class Mapper:
     # ---------- Macros ----------
 
     def _run_macro(self, name: str, *, context_env: dict[str, str]) -> None:
-        macro = self._config.macros.get(name)
+        macro = None
+        prefix = f"{name}@"
+        for m_name, m_def in self._config.macros.items():
+            if m_name.startswith(prefix) and _macro_guard_passes(m_def):
+                macro = m_def
+                name = m_name
+                break
+
+        if macro is None:
+            macro = self._config.macros.get(name)
+
         if macro is None:
             logger.warning("macro %r is not defined", name)
             return
@@ -650,14 +660,18 @@ def _macro_guard_passes(macro: MacroDef) -> bool:
     except ImportError:  # pragma: no cover — non-macOS hosts
         return False
 
-    query = macro.if_app.strip().lower()
+    raw_query = macro.if_app.strip().lower()
+    targets = [t.strip() for t in raw_query.split(",") if t.strip()]
+    if not targets:
+        return True
+
     try:
         frontmost = NSWorkspace.sharedWorkspace().frontmostApplication()
         if frontmost is None:
             return False
         name = (frontmost.localizedName() or "").lower()
         bundle = (frontmost.bundleIdentifier() or "").lower()
-        return query in name or query in bundle
+        return any(t in name or t in bundle for t in targets)
     except Exception:  # pragma: no cover
         logger.debug("if_app check failed", exc_info=True)
         return False

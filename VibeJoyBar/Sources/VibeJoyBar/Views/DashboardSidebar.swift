@@ -19,7 +19,7 @@ struct DashboardSidebar: View {
                         mappingGroup("SYSTEM", icon: "command",
                             buttons: model.configStore.bindings.filter { ["plus","home","r-stick"].contains($0.button) }.map(\.button))
                         VStack(alignment: .leading, spacing: 7) {
-                            sectionTitle("CODEX NAVIGATION", icon: "circle.dotted")
+                            sectionTitle("STICK NAVIGATION (摇杆导航)", icon: "circle.dotted")
                             ForEach(model.configStore.stickBindings) { binding in
                                 stickRow(binding)
                             }
@@ -32,7 +32,7 @@ struct DashboardSidebar: View {
                         mappingGroup("SYSTEM", icon: "command",
                             buttons: ["minus", "capture", "l-stick"].filter { btn in model.configStore.leftBindings.contains { $0.button == btn } })
                         VStack(alignment: .leading, spacing: 7) {
-                            sectionTitle("CODEX NAVIGATION", icon: "circle.dotted")
+                            sectionTitle("STICK NAVIGATION (摇杆导航)", icon: "circle.dotted")
                             ForEach(model.configStore.leftStickBindings) { binding in
                                 stickRow(binding)
                             }
@@ -60,6 +60,7 @@ struct DashboardSidebar: View {
 
     private func stickRow(_ binding: StickBinding) -> some View {
         let selected = selection == .stick(binding.direction)
+        let scope = model.configStore.bindingScope(for: .stick(binding.direction), side: model.activeControllerSide)
         return Button {
             selection = .stick(binding.direction)
             showingStickEditor = false
@@ -80,6 +81,10 @@ struct DashboardSidebar: View {
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
+
+                if model.configStore.activeProfileName != "default" {
+                    scopeIndicator(for: scope)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8)
@@ -147,6 +152,7 @@ struct DashboardSidebar: View {
             : model.configStore.leftBindings
         let item = bindings.first(where: { $0.button == button })
         let selected = selection == .button(button)
+        let scope = model.configStore.bindingScope(for: .button(button), side: model.activeControllerSide)
         return Button {
             selection = .button(button)
             showingStickEditor = false
@@ -167,6 +173,10 @@ struct DashboardSidebar: View {
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
+
+                if model.configStore.activeProfileName != "default" {
+                    scopeIndicator(for: scope)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 8)
@@ -183,6 +193,31 @@ struct DashboardSidebar: View {
         .buttonStyle(.plain)
         .accessibilityLabel("编辑 \(item?.displayName ?? button.uppercased())")
         .accessibilityValue(ActionSummary.text(for: item?.action ?? "none"))
+    }
+
+    @ViewBuilder
+    private func scopeIndicator(for scope: BindingScope) -> some View {
+        switch scope {
+        case .profileOverride:
+            HStack(spacing: 2) {
+                Image(systemName: "paintpalette.fill")
+                    .font(.system(size: 8))
+                Text("专属")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .foregroundStyle(Color.accentColor)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(Color.accentColor.opacity(0.12), in: Capsule())
+
+        case .inheritedFromGlobal:
+            Image(systemName: "lock")
+                .font(.system(size: 9))
+                .foregroundStyle(.tertiary)
+
+        case .globalBaseline:
+            EmptyView()
+        }
     }
 
     private func sectionTitle(_ title: String, icon: String) -> some View {
