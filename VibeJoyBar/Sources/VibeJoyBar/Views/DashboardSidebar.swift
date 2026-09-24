@@ -8,7 +8,8 @@ struct DashboardSidebar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             compactHeader
-            Divider().padding(.vertical, 12)
+            layerPicker
+            Divider().padding(.vertical, 10)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     if model.activeControllerSide == .right {
@@ -58,9 +59,23 @@ struct DashboardSidebar: View {
         .background(.bar)
     }
 
+    private var layerPicker: some View {
+        Picker("Layer", selection: $model.selectedLayer) {
+            Text("基础层").tag(nil as String?)
+            ForEach(model.configStore.availableLayers, id: \.self) { layer in
+                let title = layer == "layer1" ? "SL 修饰层 ◖" : "\(layer) ◖"
+                Text(title).tag(layer as String?)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
+    }
+
     private func stickRow(_ binding: StickBinding) -> some View {
         let selected = selection == .stick(binding.direction)
-        let scope = model.configStore.bindingScope(for: .stick(binding.direction), side: model.activeControllerSide)
+        let scope = model.configStore.bindingScope(for: .stick(binding.direction), layer: model.selectedLayer, side: model.activeControllerSide)
+        let currentAction = model.configStore.action(for: .stick(binding.direction), layer: model.selectedLayer, side: model.activeControllerSide)
         return Button {
             selection = .stick(binding.direction)
             showingStickEditor = false
@@ -75,14 +90,14 @@ struct DashboardSidebar: View {
                     .foregroundStyle(selected ? Color.accentColor : Color.primary)
                     .frame(width: 18)
 
-                Text(ActionSummary.text(for: binding.action))
+                Text(ActionSummary.text(for: currentAction))
                     .font(.caption)
                     .foregroundStyle(selected ? Color.primary.opacity(0.85) : Color.secondary)
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
 
-                if model.configStore.activeProfileName != "default" {
+                if model.configStore.activeProfileName != "default" || model.selectedLayer != nil {
                     scopeIndicator(for: scope)
                 }
             }
@@ -152,7 +167,8 @@ struct DashboardSidebar: View {
             : model.configStore.leftBindings
         let item = bindings.first(where: { $0.button == button })
         let selected = selection == .button(button)
-        let scope = model.configStore.bindingScope(for: .button(button), side: model.activeControllerSide)
+        let scope = model.configStore.bindingScope(for: .button(button), layer: model.selectedLayer, side: model.activeControllerSide)
+        let currentAction = model.configStore.action(for: .button(button), layer: model.selectedLayer, side: model.activeControllerSide)
         return Button {
             selection = .button(button)
             showingStickEditor = false
@@ -167,14 +183,14 @@ struct DashboardSidebar: View {
                     .foregroundStyle(selected ? Color.accentColor : Color.primary)
                     .frame(width: 50, alignment: .leading)
 
-                Text(ActionSummary.text(for: item?.action ?? "none"))
+                Text(ActionSummary.text(for: currentAction))
                     .font(.caption)
                     .foregroundStyle(selected ? Color.primary.opacity(0.85) : Color.secondary)
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
 
-                if model.configStore.activeProfileName != "default" {
+                if model.configStore.activeProfileName != "default" || model.selectedLayer != nil {
                     scopeIndicator(for: scope)
                 }
             }
@@ -192,7 +208,7 @@ struct DashboardSidebar: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("编辑 \(item?.displayName ?? button.uppercased())")
-        .accessibilityValue(ActionSummary.text(for: item?.action ?? "none"))
+        .accessibilityValue(ActionSummary.text(for: currentAction))
     }
 
     @ViewBuilder

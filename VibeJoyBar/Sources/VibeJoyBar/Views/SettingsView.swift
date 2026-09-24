@@ -44,7 +44,14 @@ struct SettingsView: View {
                         set: { model.setAutoSwitchEnabled($0) }
                     )
                 )
-                Text("当切换前台窗口时，VibeJoy 将自动激活与该应用关联的配置方案；未关联的应用将自动回退到出厂基准方案。")
+                Toggle(
+                    "切换方案时显示 HUD 胶囊提示",
+                    isOn: Binding(
+                        get: { model.hudFeedbackEnabled },
+                        set: { model.setHudFeedbackEnabled($0) }
+                    )
+                )
+                Text("当切换前台窗口时，VibeJoy 将自动激活与该应用关联的配置方案；未关联的应用将自动回退到出厂基准方案。开启 HUD 胶囊后，方案切换时将在屏幕顶部呈现优雅的灵动岛风格指示。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -61,13 +68,13 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 LabeledContent("Python 内核") {
-                    Text("vibejoy 0.9.5")
+                    Text("vibejoy 0.9.6")
                         .foregroundStyle(.secondary)
                 }
             }
         }
         .formStyle(.grouped)
-        .frame(width: 560, height: 530)
+        .frame(width: 560, height: 550)
         .padding()
         .onAppear {
             NSApp.activate(ignoringOtherApps: true)
@@ -83,10 +90,10 @@ struct SettingsView: View {
     }
 
     private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.9.5"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.9.6"
     }
 
     private var appBuild: String {
-        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "6"
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "7"
     }
 }

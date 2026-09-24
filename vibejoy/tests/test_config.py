@@ -8,6 +8,7 @@ from vibejoy.config import (
     Config,
     ConfigError,
     GlobalConfig,
+    LayerConfig,
     MacroDef,
     MetaConfig,
     ProfileConfig,
@@ -275,4 +276,115 @@ def test_merge_configs() -> None:
     # Meta: child meta takes precedence
     assert merged.meta.apps == ("com.apple.Safari",)
     assert merged.meta.description == "Child profile"
+
+
+def test_layer_config_parsing(tmp_path: Path) -> None:
+    toml = """
+[profile.right.buttons]
+sl = "modifier:layer1"
+a = "tap:enter"
+
+[profile.right.layers.layer1.buttons]
+a = "combo:cmd+c"
+b = "combo:cmd+v"
+
+[profile.right.layers.layer1.stick]
+up = "tap:page_up"
+"""
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text(toml, encoding="utf-8")
+    cfg = load_config(cfg_file)
+
+    p = cfg.profiles["right"]
+    assert "layer1" in p.layers
+    l1 = p.layers["layer1"]
+    assert l1.buttons["a"] == "combo:cmd+c"
+    assert l1.buttons["b"] == "combo:cmd+v"
+    assert l1.stick["up"] == "tap:page_up"
+
+
+def test_modifier_referencing_undefined_layer_fails(tmp_path: Path) -> None:
+    toml = """
+[profile.right.buttons]
+sl = "modifier:non_existent"
+"""
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text(toml, encoding="utf-8")
+    with pytest.raises(ConfigError, match="modifier layer 'non_existent' is not defined"):
+        load_config(cfg_file)
+
+
+def test_modifier_on_stick_fails(tmp_path: Path) -> None:
+    toml = """
+[profile.right.stick]
+up = "modifier:layer1"
+
+[profile.right.layers.layer1.buttons]
+a = "tap:space"
+"""
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text(toml, encoding="utf-8")
+    with pytest.raises(ConfigError, match="'modifier:' is only supported on a button"):
+        load_config(cfg_file)
+
+
+def test_modifier_in_macro_fails(tmp_path: Path) -> None:
+    toml = """
+[macro.bad_mod]
+steps = ["modifier:layer1"]
+"""
+    cfg_file = tmp_path / "config.toml"
+    cfg_file.write_text(toml, encoding="utf-8")
+    with pytest.raises(ConfigError, match="modifier not allowed inside macros"):
+        load_config(cfg_file)
+
+
+def test_merge_configs_deep_merges_layers() -> None:
+    base = Config(
+        global_=GlobalConfig(),
+        profiles={
+            "right": ProfileConfig(
+                buttons={"sl": "modifier:layer1", "a": "tap:enter"},
+                layers={
+                    "layer1": LayerConfig(
+                        buttons={"a": "combo:cmd+c", "b": "combo:cmd+v"},
+                        stick={"up": "tap:page_up"},
+                    ),
+                },
+            ),
+        },
+        macros={},
+    )
+    child = Config(
+        global_=GlobalConfig(),
+        profiles={
+            "right": ProfileConfig(
+                buttons={"a": "tap:space"},
+                layers={
+                    "layer1": LayerConfig(
+                        buttons={"b": "combo:cmd+x", "x": "tap:escape"},
+                    ),
+                    "layer2": LayerConfig(
+                        buttons={"a": "tap:tab"},
+                    ),
+                },
+            ),
+        },
+        macros={},
+    )
+
+    merged = merge_configs(base, child)
+    p = merged.profiles["right"]
+    assert "layer1" in p.layers
+    assert "layer2" in p.layers
+
+    # layer1: buttons merged (b overridden, a inherited, x added)
+    assert p.layers["layer1"].buttons["a"] == "combo:cmd+c"
+    assert p.layers["layer1"].buttons["b"] == "combo:cmd+x"
+    assert p.layers["layer1"].buttons["x"] == "tap:escape"
+    # layer1: stick inherited
+    assert p.layers["layer1"].stick["up"] == "tap:page_up"
+
+    # layer2: added from child
+    assert p.layers["layer2"].buttons["a"] == "tap:tab"
 

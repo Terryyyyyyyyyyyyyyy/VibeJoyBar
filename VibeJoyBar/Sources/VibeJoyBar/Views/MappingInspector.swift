@@ -21,13 +21,23 @@ struct MappingInspector: View {
 
     @ViewBuilder private func inspector(_ selected: MappingSelection) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("控制检查器").font(.caption.weight(.bold)).foregroundStyle(.tertiary).tracking(1)
+            HStack(spacing: 8) {
+                Text("控制检查器").font(.caption.weight(.bold)).foregroundStyle(.tertiary).tracking(1)
+                if let layer = model.selectedLayer {
+                    Text(layer == "layer1" ? "SL 修饰层 ◖" : "\(layer) ◖")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.accentColor.opacity(0.12), in: Capsule())
+                }
+            }
             Text(selectionTitle(selected)).font(.title2.weight(.bold))
             Text(purpose(for: selected)).font(.callout).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
 
-        let scope = model.configStore.bindingScope(for: selected, side: model.activeControllerSide)
+        let scope = model.configStore.bindingScope(for: selected, layer: model.selectedLayer, side: model.activeControllerSide)
         let isRecommendedGlobal = MappingDefaults.isRecommendedGlobalKey(for: selected)
 
         GroupBox {
@@ -49,7 +59,7 @@ struct MappingInspector: View {
 
                 case .inheritedFromGlobal:
                     HStack(spacing: 6) {
-                        Text("🔒 继承自全局基准")
+                        Text(model.selectedLayer != nil ? "🔒 继承自基础层" : "🔒 继承自全局基准")
                             .font(.caption.weight(.bold))
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 8)
@@ -63,14 +73,16 @@ struct MappingInspector: View {
                         }
                         Spacer()
                     }
-                    Text("当前按键继承自全局方案 (default)，与全局基准保持同步。")
+                    Text(model.selectedLayer != nil
+                        ? "当前修饰层未单独覆盖该按键，触发时将回退执行基础层动作。"
+                        : "当前按键继承自全局方案 (default)，与全局基准保持同步。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
 
                 case .profileOverride:
                     HStack(spacing: 6) {
-                        Text("🎨 本方案专属覆盖")
+                        Text(model.selectedLayer != nil ? "⚡️ 修饰层专属覆盖" : "🎨 本方案专属覆盖")
                             .font(.caption.weight(.bold))
                             .foregroundStyle(Color.accentColor)
                             .padding(.horizontal, 8)
@@ -79,13 +91,15 @@ struct MappingInspector: View {
 
                         Spacer()
 
-                        Button("恢复继承全局") {
-                            model.configStore.resetToGlobalDefault(selection: selected, side: model.activeControllerSide)
+                        Button(model.selectedLayer != nil ? "移除修饰覆盖" : "恢复继承全局") {
+                            model.configStore.resetToGlobalDefault(selection: selected, layer: model.selectedLayer, side: model.activeControllerSide)
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
                     }
-                    Text("此按键已在当前方案 (\(model.configStore.activeProfileName)) 中单独定制，不再受全局默认值影响。")
+                    Text(model.selectedLayer != nil
+                        ? "此按键已在修饰层 (\(model.selectedLayer!)) 中配置专用动作，按下修饰键时生效。"
+                        : "此按键已在当前方案 (\(model.configStore.activeProfileName)) 中单独定制，不再受全局默认值影响。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -102,10 +116,10 @@ struct MappingInspector: View {
                 HStack(spacing: 8) {
                     Image(systemName: "command")
                         .foregroundStyle(Color.accentColor)
-                    Text(ActionSummary.text(for: model.configStore.action(for: selected, side: model.activeControllerSide)))
+                    Text(ActionSummary.text(for: model.configStore.action(for: selected, layer: model.selectedLayer, side: model.activeControllerSide)))
                         .font(.body.weight(.semibold))
                 }
-                if model.configStore.action(for: selected, side: model.activeControllerSide) == "none" {
+                if model.configStore.action(for: selected, layer: model.selectedLayer, side: model.activeControllerSide) == "none" {
                     Text("安全停用 · 不会发送输入").font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -177,10 +191,10 @@ struct MappingInspector: View {
         }
 
         HStack {
-            Button("设为不执行") { model.configStore.setAction("none", for: selected, side: model.activeControllerSide) }
+            Button("设为不执行") { model.configStore.setAction("none", for: selected, layer: model.selectedLayer, side: model.activeControllerSide) }
                 .buttonStyle(.bordered)
             Spacer()
-            Button("恢复默认") { model.configStore.setAction(MappingDefaults.action(for: selected), for: selected, side: model.activeControllerSide) }
+            Button("恢复默认") { model.configStore.setAction(MappingDefaults.action(for: selected), for: selected, layer: model.selectedLayer, side: model.activeControllerSide) }
                 .buttonStyle(.bordered)
         }
         .font(.caption)
@@ -209,14 +223,14 @@ struct MappingInspector: View {
 
     private func presetBinding(for selected: MappingSelection) -> Binding<String> {
         Binding(
-            get: { model.configStore.action(for: selected, side: model.activeControllerSide) },
-            set: { model.configStore.setAction($0, for: selected, side: model.activeControllerSide) }
+            get: { model.configStore.action(for: selected, layer: model.selectedLayer, side: model.activeControllerSide) },
+            set: { model.configStore.setAction($0, for: selected, layer: model.selectedLayer, side: model.activeControllerSide) }
         )
     }
     private func actionBinding(for selected: MappingSelection) -> Binding<String> {
         Binding(
-            get: { model.configStore.action(for: selected, side: model.activeControllerSide) },
-            set: { model.configStore.setAction($0, for: selected, side: model.activeControllerSide) }
+            get: { model.configStore.action(for: selected, layer: model.selectedLayer, side: model.activeControllerSide) },
+            set: { model.configStore.setAction($0, for: selected, layer: model.selectedLayer, side: model.activeControllerSide) }
         )
     }
     private func purpose(for selected: MappingSelection) -> String {

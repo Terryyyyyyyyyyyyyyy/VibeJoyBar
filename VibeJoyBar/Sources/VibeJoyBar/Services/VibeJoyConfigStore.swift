@@ -24,6 +24,11 @@ final class VibeJoyConfigStore {
     private(set) var stickBindings: [StickBinding] = []
     private(set) var leftBindings: [ButtonBinding] = []
     private(set) var leftStickBindings: [StickBinding] = []
+    private(set) var rightLayerBindings: [String: [ButtonBinding]] = [:]
+    private(set) var rightLayerStickBindings: [String: [StickBinding]] = [:]
+    private(set) var leftLayerBindings: [String: [ButtonBinding]] = [:]
+    private(set) var leftLayerStickBindings: [String: [StickBinding]] = [:]
+    private(set) var availableLayers: [String] = ["layer1"]
     private(set) var deadzone: Double = 0.35
     private(set) var targetApps: [String] = []
     private(set) var sourceText = ""
@@ -57,6 +62,29 @@ final class VibeJoyConfigStore {
             leftBindings = Self.knownLeftButtons.map { ButtonBinding(button: $0, action: leftButtons[$0] ?? "none") }
             leftStickBindings = Self.knownStickDirections.map { StickBinding(direction: $0, action: leftSticks[$0] ?? "none") }
 
+            let layers = Self.parseDefinedLayers(from: text)
+            availableLayers = layers
+            var rLayerBtns: [String: [ButtonBinding]] = [:]
+            var rLayerStks: [String: [StickBinding]] = [:]
+            var lLayerBtns: [String: [ButtonBinding]] = [:]
+            var lLayerStks: [String: [StickBinding]] = [:]
+
+            for layer in layers {
+                let rBtns = Self.parseSection("profile.right.layers.\(layer).buttons", from: text)
+                let rStk = Self.parseSection("profile.right.layers.\(layer).stick", from: text)
+                rLayerBtns[layer] = Self.knownButtons.map { ButtonBinding(button: $0, action: rBtns[$0] ?? "none") }
+                rLayerStks[layer] = Self.knownStickDirections.map { StickBinding(direction: $0, action: rStk[$0] ?? "none") }
+
+                let lBtns = Self.parseSection("profile.left.layers.\(layer).buttons", from: text)
+                let lStk = Self.parseSection("profile.left.layers.\(layer).stick", from: text)
+                lLayerBtns[layer] = Self.knownLeftButtons.map { ButtonBinding(button: $0, action: lBtns[$0] ?? "none") }
+                lLayerStks[layer] = Self.knownStickDirections.map { StickBinding(direction: $0, action: lStk[$0] ?? "none") }
+            }
+            rightLayerBindings = rLayerBtns
+            rightLayerStickBindings = rLayerStks
+            leftLayerBindings = lLayerBtns
+            leftLayerStickBindings = lLayerStks
+
             deadzone = Self.parseDeadzone(from: text) ?? 0.35
             targetApps = Self.parseTargetApps(from: text)
             hasUnsavedChanges = false; errorMessage = nil
@@ -65,6 +93,11 @@ final class VibeJoyConfigStore {
             stickBindings = Self.knownStickDirections.map { StickBinding(direction: $0, action: "none") }
             leftBindings = Self.knownLeftButtons.map { ButtonBinding(button: $0, action: "none") }
             leftStickBindings = Self.knownStickDirections.map { StickBinding(direction: $0, action: "none") }
+            rightLayerBindings = ["layer1": Self.knownButtons.map { ButtonBinding(button: $0, action: "none") }]
+            rightLayerStickBindings = ["layer1": Self.knownStickDirections.map { StickBinding(direction: $0, action: "none") }]
+            leftLayerBindings = ["layer1": Self.knownLeftButtons.map { ButtonBinding(button: $0, action: "none") }]
+            leftLayerStickBindings = ["layer1": Self.knownStickDirections.map { StickBinding(direction: $0, action: "none") }]
+            availableLayers = ["layer1"]
             targetApps = []
             errorMessage = "无法读取配置：\(error.localizedDescription)"
         }
@@ -118,74 +151,181 @@ final class VibeJoyConfigStore {
     func setLeftStickAction(_ action: String, at index: Int) { guard leftStickBindings.indices.contains(index) else { return }; leftStickBindings[index].action = action; hasUnsavedChanges = true }
     func setDeadzone(_ value: Double) { deadzone = min(max(value, 0), 0.95); hasUnsavedChanges = true }
 
-    func action(for selection: MappingSelection, side: ActiveControllerSide = .right) -> String {
-        switch selection {
-        case let .button(button):
-            let list = (side == .right ? bindings : leftBindings)
-            return list.first(where: { $0.button == button })?.action ?? "none"
-        case let .stick(direction):
-            let list = (side == .right ? stickBindings : leftStickBindings)
-            return list.first(where: { $0.direction == direction })?.action ?? "none"
+    func layerBindings(layer: String, side: ActiveControllerSide = .right) -> [ButtonBinding] {
+        if side == .right {
+            return rightLayerBindings[layer] ?? Self.knownButtons.map { ButtonBinding(button: $0, action: "none") }
+        } else {
+            return leftLayerBindings[layer] ?? Self.knownLeftButtons.map { ButtonBinding(button: $0, action: "none") }
         }
     }
 
-    func setAction(_ action: String, for selection: MappingSelection, side: ActiveControllerSide = .right) {
-        switch selection {
-        case let .button(button):
-            if side == .right {
-                if let index = bindings.firstIndex(where: { $0.button == button }) { setAction(action, at: index) }
-            } else {
-                if let index = leftBindings.firstIndex(where: { $0.button == button }) { setLeftAction(action, at: index) }
-            }
-        case let .stick(direction):
-            if side == .right {
-                if let index = stickBindings.firstIndex(where: { $0.direction == direction }) { setStickAction(action, at: index) }
-            } else {
-                if let index = leftStickBindings.firstIndex(where: { $0.direction == direction }) { setLeftStickAction(action, at: index) }
-            }
+    func layerStickBindings(layer: String, side: ActiveControllerSide = .right) -> [StickBinding] {
+        if side == .right {
+            return rightLayerStickBindings[layer] ?? Self.knownStickDirections.map { StickBinding(direction: $0, action: "none") }
+        } else {
+            return leftLayerStickBindings[layer] ?? Self.knownStickDirections.map { StickBinding(direction: $0, action: "none") }
         }
     }
 
-    func globalBaselineAction(for selection: MappingSelection, side: ActiveControllerSide = .right) -> String {
+    func action(for selection: MappingSelection, layer: String? = nil, side: ActiveControllerSide = .right) -> String {
+        guard let layer = layer else {
+            switch selection {
+            case let .button(button):
+                let list = (side == .right ? bindings : leftBindings)
+                return list.first(where: { $0.button == button })?.action ?? "none"
+            case let .stick(direction):
+                let list = (side == .right ? stickBindings : leftStickBindings)
+                return list.first(where: { $0.direction == direction })?.action ?? "none"
+            }
+        }
+        switch selection {
+        case let .button(button):
+            let list = layerBindings(layer: layer, side: side)
+            let act = list.first(where: { $0.button == button })?.action ?? "none"
+            if act != "none" { return act }
+            return action(for: selection, side: side)
+        case let .stick(direction):
+            let list = layerStickBindings(layer: layer, side: side)
+            let act = list.first(where: { $0.direction == direction })?.action ?? "none"
+            if act != "none" { return act }
+            return action(for: selection, side: side)
+        }
+    }
+
+    func setAction(_ action: String, for selection: MappingSelection, layer: String? = nil, side: ActiveControllerSide = .right) {
+        guard let layer = layer else {
+            switch selection {
+            case let .button(button):
+                if side == .right {
+                    if let index = bindings.firstIndex(where: { $0.button == button }) { setAction(action, at: index) }
+                } else {
+                    if let index = leftBindings.firstIndex(where: { $0.button == button }) { setLeftAction(action, at: index) }
+                }
+            case let .stick(direction):
+                if side == .right {
+                    if let index = stickBindings.firstIndex(where: { $0.direction == direction }) { setStickAction(action, at: index) }
+                } else {
+                    if let index = leftStickBindings.firstIndex(where: { $0.direction == direction }) { setLeftStickAction(action, at: index) }
+                }
+            }
+            return
+        }
+        setLayerAction(action, for: selection, layer: layer, side: side)
+    }
+
+    func setLayerAction(_ action: String, for selection: MappingSelection, layer: String, side: ActiveControllerSide = .right) {
+        if !availableLayers.contains(layer) {
+            availableLayers.append(layer)
+        }
+        switch selection {
+        case let .button(button):
+            if side == .right {
+                var current = layerBindings(layer: layer, side: .right)
+                if let idx = current.firstIndex(where: { $0.button == button }) {
+                    current[idx].action = action
+                }
+                rightLayerBindings[layer] = current
+            } else {
+                var current = layerBindings(layer: layer, side: .left)
+                if let idx = current.firstIndex(where: { $0.button == button }) {
+                    current[idx].action = action
+                }
+                leftLayerBindings[layer] = current
+            }
+        case let .stick(direction):
+            if side == .right {
+                var current = layerStickBindings(layer: layer, side: .right)
+                if let idx = current.firstIndex(where: { $0.direction == direction }) {
+                    current[idx].action = action
+                }
+                rightLayerStickBindings[layer] = current
+            } else {
+                var current = layerStickBindings(layer: layer, side: .left)
+                if let idx = current.firstIndex(where: { $0.direction == direction }) {
+                    current[idx].action = action
+                }
+                leftLayerStickBindings[layer] = current
+            }
+        }
+        hasUnsavedChanges = true
+    }
+
+    func globalBaselineAction(for selection: MappingSelection, layer: String? = nil, side: ActiveControllerSide = .right) -> String {
+        guard let layer = layer else {
+            let profilesDir = configURL.deletingLastPathComponent().appendingPathComponent("profiles")
+            let defaultURL = profilesDir.appendingPathComponent("default.toml")
+
+            if activeProfileName == "default" {
+                switch selection {
+                case let .button(btn):
+                    let list = (side == .right ? bindings : leftBindings)
+                    return list.first(where: { $0.button == btn })?.action ?? MappingDefaults.action(for: selection)
+                case let .stick(dir):
+                    let list = (side == .right ? stickBindings : leftStickBindings)
+                    return list.first(where: { $0.direction == dir })?.action ?? MappingDefaults.action(for: selection)
+                }
+            }
+
+            if FileManager.default.fileExists(atPath: defaultURL.path),
+               let text = try? String(contentsOf: defaultURL, encoding: .utf8) {
+                let rightButtons = Self.parseSection("profile.right.buttons", from: text)
+                let rightSticks = Self.parseSection("profile.right.stick", from: text)
+                let leftButtons = Self.parseSection("profile.left.buttons", from: text)
+                let leftSticks = Self.parseSection("profile.left.stick", from: text)
+
+                switch selection {
+                case let .button(btn):
+                    let dict = (side == .right ? rightButtons : leftButtons)
+                    if let action = dict[btn] {
+                        return action
+                    }
+                case let .stick(dir):
+                    let dict = (side == .right ? rightSticks : leftSticks)
+                    if let action = dict[dir] {
+                        return action
+                    }
+                }
+            }
+
+            return MappingDefaults.action(for: selection)
+        }
+
         let profilesDir = configURL.deletingLastPathComponent().appendingPathComponent("profiles")
         let defaultURL = profilesDir.appendingPathComponent("default.toml")
 
         if activeProfileName == "default" {
-            switch selection {
-            case let .button(btn):
-                let list = (side == .right ? bindings : leftBindings)
-                return list.first(where: { $0.button == btn })?.action ?? MappingDefaults.action(for: selection)
-            case let .stick(dir):
-                let list = (side == .right ? stickBindings : leftStickBindings)
-                return list.first(where: { $0.direction == dir })?.action ?? MappingDefaults.action(for: selection)
-            }
+            return action(for: selection, layer: layer, side: side)
         }
 
         if FileManager.default.fileExists(atPath: defaultURL.path),
            let text = try? String(contentsOf: defaultURL, encoding: .utf8) {
-            let rightButtons = Self.parseSection("profile.right.buttons", from: text)
-            let rightSticks = Self.parseSection("profile.right.stick", from: text)
-            let leftButtons = Self.parseSection("profile.left.buttons", from: text)
-            let leftSticks = Self.parseSection("profile.left.stick", from: text)
-
+            let section = (side == .right ? "profile.right.layers.\(layer)" : "profile.left.layers.\(layer)")
             switch selection {
             case let .button(btn):
-                let dict = (side == .right ? rightButtons : leftButtons)
-                if let action = dict[btn] {
-                    return action
-                }
+                let dict = Self.parseSection("\(section).buttons", from: text)
+                if let action = dict[btn] { return action }
             case let .stick(dir):
-                let dict = (side == .right ? rightSticks : leftSticks)
-                if let action = dict[dir] {
-                    return action
-                }
+                let dict = Self.parseSection("\(section).stick", from: text)
+                if let action = dict[dir] { return action }
             }
         }
 
-        return MappingDefaults.action(for: selection)
+        return "none"
     }
 
-    func bindingScope(for selection: MappingSelection, side: ActiveControllerSide = .right) -> BindingScope {
+    func bindingScope(for selection: MappingSelection, layer: String? = nil, side: ActiveControllerSide = .right) -> BindingScope {
+        if let layer = layer {
+            switch selection {
+            case let .button(btn):
+                let bindings = (side == .right ? rightLayerBindings[layer] : leftLayerBindings[layer]) ?? []
+                let act = bindings.first(where: { $0.button == btn })?.action ?? "none"
+                return act != "none" ? .profileOverride : .inheritedFromGlobal
+            case let .stick(dir):
+                let bindings = (side == .right ? rightLayerStickBindings[layer] : leftLayerStickBindings[layer]) ?? []
+                let act = bindings.first(where: { $0.direction == dir })?.action ?? "none"
+                return act != "none" ? .profileOverride : .inheritedFromGlobal
+            }
+        }
         if activeProfileName == "default" {
             return .globalBaseline
         }
@@ -194,7 +334,12 @@ final class VibeJoyConfigStore {
         return current == base ? .inheritedFromGlobal : .profileOverride
     }
 
-    func resetToGlobalDefault(selection: MappingSelection, side: ActiveControllerSide = .right) {
+    func resetToGlobalDefault(selection: MappingSelection, layer: String? = nil, side: ActiveControllerSide = .right) {
+        if let layer = layer {
+            setAction("none", for: selection, layer: layer, side: side)
+            hasUnsavedChanges = true
+            return
+        }
         let defaultAction = globalBaselineAction(for: selection, side: side)
         setAction(defaultAction, for: selection, side: side)
         hasUnsavedChanges = true
@@ -212,6 +357,34 @@ final class VibeJoyConfigStore {
         let leftSticks = Dictionary(uniqueKeysWithValues: leftStickBindings.map { ($0.direction, normalizedAction($0.action)) })
         text = Self.renderSection("profile.left.buttons", entries: leftButtons, keys: Self.knownLeftButtons, in: text)
         text = Self.renderSection("profile.left.stick", entries: leftSticks, keys: Self.knownStickDirections, in: text)
+
+        let allLayers = Set(availableLayers + Array(rightLayerBindings.keys) + Array(leftLayerBindings.keys)).sorted()
+        for layer in allLayers {
+            if let rBtns = rightLayerBindings[layer] {
+                let dict = Dictionary(uniqueKeysWithValues: rBtns.map { ($0.button, normalizedAction($0.action)) })
+                if text.contains("[profile.right.layers.\(layer).buttons]") || dict.values.contains(where: { $0 != "none" }) {
+                    text = Self.renderSection("profile.right.layers.\(layer).buttons", entries: dict, keys: Self.knownButtons, in: text)
+                }
+            }
+            if let rStks = rightLayerStickBindings[layer] {
+                let dict = Dictionary(uniqueKeysWithValues: rStks.map { ($0.direction, normalizedAction($0.action)) })
+                if text.contains("[profile.right.layers.\(layer).stick]") || dict.values.contains(where: { $0 != "none" }) {
+                    text = Self.renderSection("profile.right.layers.\(layer).stick", entries: dict, keys: Self.knownStickDirections, in: text)
+                }
+            }
+            if let lBtns = leftLayerBindings[layer] {
+                let dict = Dictionary(uniqueKeysWithValues: lBtns.map { ($0.button, normalizedAction($0.action)) })
+                if text.contains("[profile.left.layers.\(layer).buttons]") || dict.values.contains(where: { $0 != "none" }) {
+                    text = Self.renderSection("profile.left.layers.\(layer).buttons", entries: dict, keys: Self.knownLeftButtons, in: text)
+                }
+            }
+            if let lStks = leftLayerStickBindings[layer] {
+                let dict = Dictionary(uniqueKeysWithValues: lStks.map { ($0.direction, normalizedAction($0.action)) })
+                if text.contains("[profile.left.layers.\(layer).stick]") || dict.values.contains(where: { $0 != "none" }) {
+                    text = Self.renderSection("profile.left.layers.\(layer).stick", entries: dict, keys: Self.knownStickDirections, in: text)
+                }
+            }
+        }
 
         text = Self.renderDeadzone(deadzone, in: text)
         return Self.renderTargetApps(targetApps, in: text)
@@ -441,7 +614,7 @@ final class VibeJoyConfigStore {
 
     static let fallbackDefaultConfig = """
     # VibeJoy — Joy-Con → macOS keyboard mapping.
-    # Default Profile (出厂基准方案 v0.9.5)
+    # Default Profile (出厂基准方案 v0.9.6)
 
     [meta]
     description = "出厂基准方案"
@@ -526,6 +699,28 @@ final class VibeJoyConfigStore {
     static func parseRightStick(from text: String) -> [String: String] { parseSection("profile.right.stick", from: text) }
     static func parseLeftButtons(from text: String) -> [String: String] { parseSection("profile.left.buttons", from: text) }
     static func parseLeftStick(from text: String) -> [String: String] { parseSection("profile.left.stick", from: text) }
+
+    static func parseDefinedLayers(from text: String) -> [String] {
+        var names = Set<String>()
+        let pattern = #"(?m)^\[profile\.(?:right|left)\.layers\.([a-zA-Z0-9_\-]+)\.(?:buttons|stick)\]"#
+        if let regex = try? NSRegularExpression(pattern: pattern) {
+            let nsText = text as NSString
+            let matches = regex.matches(in: text, range: NSRange(location: 0, length: nsText.length))
+            for match in matches {
+                if match.numberOfRanges > 1 {
+                    let range = match.range(at: 1)
+                    if range.location != NSNotFound {
+                        names.insert(nsText.substring(with: range))
+                    }
+                }
+            }
+        }
+        var list = Array(names).sorted()
+        if !list.contains("layer1") {
+            list.insert("layer1", at: 0)
+        }
+        return list
+    }
 
     static func parseDeadzone(from text: String) -> Double? {
         guard let lines = sectionLines("global", from: text) else { return nil }

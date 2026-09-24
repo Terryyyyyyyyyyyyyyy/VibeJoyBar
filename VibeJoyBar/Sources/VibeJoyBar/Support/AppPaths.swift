@@ -6,6 +6,7 @@ enum AppPaths {
     static let uvKey = "uvExecutablePath"
     static let autoRunKey = "autoRunVibeJoy"
     static let autoSwitchKey = "auto_switch_profiles"
+    static let hudFeedbackKey = "showHUDFeedbackOnSwitch"
 
     static let legacyProjectPath = "/Users/terry/Documents/Codex/2026-08-30/referenced-chatgpt-conversation-this-is-an/work/vibejoy"
     static let defaultProjectPath = "/Users/terry/Library/CloudStorage/SynologyDrive-Home/Data/Codex/VibeJoy/vibejoy"

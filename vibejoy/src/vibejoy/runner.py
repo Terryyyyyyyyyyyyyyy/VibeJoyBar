@@ -270,6 +270,7 @@ def _start_control_server(
                     for r in readers
                 ],
                 "mapper": {
+                    "active_layer": mapper.active_layer if mapper else None,
                     "app_switcher_active": mapper._state.app_switcher_active if mapper else None,
                     "holds": list(mapper._state.holds.keys()) if mapper else [],
                     "stick_holds": list(mapper._state.stick_holds.keys()) if mapper else [],
@@ -290,6 +291,7 @@ def _start_control_server(
                     "battery": bat,
                 }
             return {
+                "active_layer": mapper.active_layer if mapper else None,
                 "sides": sorted(r.side for r in live_readers),
                 "controllers": controllers_status,
                 "calibration": {

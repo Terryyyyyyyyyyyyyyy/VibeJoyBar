@@ -10,6 +10,7 @@ from vibejoy.actions import (
     DelayAction,
     HoldAction,
     MacroRef,
+    ModifierAction,
     NoAction,
     RepeatAction,
     ScrollAction,
@@ -158,3 +159,33 @@ class TestErrors:
     def test_non_string_input(self) -> None:
         with pytest.raises(ActionParseError):
             parse_action(None)  # type: ignore[arg-type]
+
+
+class TestModifier:
+    def test_simple(self) -> None:
+        assert parse_action("modifier:layer1") == ModifierAction(layer="layer1", fallback=None)
+        assert parse_action("modifier:num_pad-2") == ModifierAction(layer="num_pad-2", fallback=None)
+
+    def test_with_fallback(self) -> None:
+        assert parse_action("modifier:layer1?tap:space") == ModifierAction(
+            layer="layer1", fallback=TapAction(key="space")
+        )
+        assert parse_action("modifier:layer1?combo:cmd+c") == ModifierAction(
+            layer="layer1", fallback=ComboAction(keys=("cmd", "c"))
+        )
+
+    def test_invalid_layer_name(self) -> None:
+        with pytest.raises(ActionParseError, match="invalid modifier layer name"):
+            parse_action("modifier:layer#1")
+        with pytest.raises(ActionParseError, match="invalid modifier layer name"):
+            parse_action("modifier:layer 1")
+        with pytest.raises(ActionParseError, match="invalid modifier layer name"):
+            parse_action("modifier:?tap:space")
+
+    def test_empty_fallback(self) -> None:
+        with pytest.raises(ActionParseError, match="empty fallback action"):
+            parse_action("modifier:layer1?")
+
+    def test_nested_modifier_rejected(self) -> None:
+        with pytest.raises(ActionParseError, match="nested modifier action is not allowed"):
+            parse_action("modifier:layer1?modifier:layer2")

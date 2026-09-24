@@ -20,6 +20,7 @@ Grammar
     window_switch:<app1>,<app2>,...  # cycle focus between apps
     app_switcher:system           # hold Cmd+Tab; stick left/right moves selection
     shell:<command>            # run shell command, non-blocking, fires on both press and release
+    modifier:<layer>[?<fallback>] # switch to layer while held; optional fallback on solo release
 
 Key names are lowercase; modifiers are ``cmd`` / ``shift`` / ``ctrl`` /
 ``alt`` / ``fn``. Exact list lives in ``keyboard.py``.
@@ -27,6 +28,7 @@ Key names are lowercase; modifiers are ``cmd`` / ``shift`` / ``ctrl`` /
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import TypeAlias
 
@@ -120,6 +122,14 @@ class ShellAction:
     cmd: str
 
 
+@dataclass(frozen=True, slots=True)
+class ModifierAction:
+    """Switch to a physical modifier layer while button is held; optional fallback on solo release."""
+
+    layer: str
+    fallback: Action | None = None
+
+
 Action: TypeAlias = (
     NoAction
     | TapAction
@@ -135,6 +145,7 @@ Action: TypeAlias = (
     | WindowSwitchAction
     | AppSwitcherAction
     | ShellAction
+    | ModifierAction
 )
 
 
@@ -274,6 +285,24 @@ def _parse_shell(payload: str, _raw: str) -> Action:
     return ShellAction(cmd=payload)
 
 
+def _parse_modifier(payload: str, raw: str) -> Action:
+    layer_part, sep, fallback_part = payload.partition("?")
+    layer = layer_part.strip()
+    if not layer or not re.match(r"^[a-zA-Z0-9_\-]+$", layer):
+        raise ActionParseError(f"invalid modifier layer name {layer_part!r} in {raw!r}")
+
+    fallback: Action | None = None
+    if sep:
+        fallback_part = fallback_part.strip()
+        if not fallback_part:
+            raise ActionParseError(f"empty fallback action in {raw!r}")
+        fallback = parse_action(fallback_part)
+        if isinstance(fallback, ModifierAction):
+            raise ActionParseError(f"nested modifier action is not allowed as fallback in {raw!r}")
+
+    return ModifierAction(layer=layer, fallback=fallback)
+
+
 _PARSERS: dict[str, callable] = {
     "tap": _parse_tap,
     "hold": _parse_hold,
@@ -288,6 +317,7 @@ _PARSERS: dict[str, callable] = {
     "window_switch": _parse_window_switch,
     "app_switcher": _parse_app_switcher,
     "shell": _parse_shell,
+    "modifier": _parse_modifier,
 }
 
 

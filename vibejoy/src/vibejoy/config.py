@@ -36,6 +36,7 @@ from .actions import (
     ActionParseError,
     AppSwitcherAction,
     MacroRef,
+    ModifierAction,
     WindowSwitchAction,
     parse_action,
 )
@@ -71,11 +72,19 @@ class GlobalConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class LayerConfig:
+    buttons: dict[str, str] = field(default_factory=dict)
+    stick: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
 class ProfileConfig:
     buttons: dict[str, str] = field(default_factory=dict)
     """Button name (lowercase) → action DSL string."""
     stick: dict[str, str] = field(default_factory=dict)
     """Stick direction (``up`` / ``down`` / ... ) → action DSL string."""
+    layers: dict[str, LayerConfig] = field(default_factory=dict)
+    """Layer name → LayerConfig."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,9 +209,19 @@ def merge_configs(base: Config, override: Config) -> Config:
     for side in all_sides:
         base_p = base.profiles.get(side, ProfileConfig())
         override_p = override.profiles.get(side, ProfileConfig())
+        all_layers = set(base_p.layers.keys()) | set(override_p.layers.keys())
+        merged_layers: dict[str, LayerConfig] = {}
+        for l_name in all_layers:
+            base_l = base_p.layers.get(l_name, LayerConfig())
+            over_l = override_p.layers.get(l_name, LayerConfig())
+            merged_layers[l_name] = LayerConfig(
+                buttons={**base_l.buttons, **over_l.buttons},
+                stick={**base_l.stick, **over_l.stick},
+            )
         merged_profiles[side] = ProfileConfig(
             buttons={**base_p.buttons, **override_p.buttons},
             stick={**base_p.stick, **override_p.stick},
+            layers=merged_layers,
         )
 
     merged_macros = {**base.macros, **override.macros}
@@ -232,8 +251,9 @@ def validate_config(cfg: Config) -> list[str]:
         errors.append(f"global.stick_mode must be '4dir' or '8dir', got {g.stick_mode!r}")
 
     macro_names = set(cfg.macros)
+    all_layers = {layer_name for prof in cfg.profiles.values() for layer_name in prof.layers}
     for side, profile in cfg.profiles.items():
-        _validate_profile(side, profile, macro_names, errors)
+        _validate_profile(side, profile, macro_names, errors, defined_layers=all_layers)
 
     for name, macro in cfg.macros.items():
         _validate_macro(name, macro, errors)
@@ -564,20 +584,44 @@ def _build_profiles(raw: dict[str, Any]) -> dict[Side, ProfileConfig]:
             raise ConfigError(f"unknown profile {side_name!r} (use 'right' or 'left')")
         if not isinstance(body, dict):
             raise ConfigError(f"[profile.{side_name}] must be a table, got {type(body).__name__}")
-        unknown = set(body) - {"buttons", "stick"}
+        unknown = set(body) - {"buttons", "stick", "layers"}
         if unknown:
             raise ConfigError(f"unknown key(s) in [profile.{side_name}]: {sorted(unknown)}")
 
         buttons_raw = body.get("buttons") or {}
         stick_raw = body.get("stick") or {}
+        layers_raw = body.get("layers") or {}
         if not isinstance(buttons_raw, dict):
             raise ConfigError(f"[profile.{side_name}.buttons] must be a table")
         if not isinstance(stick_raw, dict):
             raise ConfigError(f"[profile.{side_name}.stick] must be a table")
+        if not isinstance(layers_raw, dict):
+            raise ConfigError(f"[profile.{side_name}.layers] must be a table")
+
+        layers: dict[str, LayerConfig] = {}
+        for layer_name, layer_body in layers_raw.items():
+            if not isinstance(layer_body, dict):
+                raise ConfigError(f"[profile.{side_name}.layers.{layer_name}] must be a table")
+            unknown_layer = set(layer_body) - {"buttons", "stick"}
+            if unknown_layer:
+                raise ConfigError(
+                    f"unknown key(s) in [profile.{side_name}.layers.{layer_name}]: {sorted(unknown_layer)}"
+                )
+            l_buttons_raw = layer_body.get("buttons") or {}
+            l_stick_raw = layer_body.get("stick") or {}
+            if not isinstance(l_buttons_raw, dict):
+                raise ConfigError(f"[profile.{side_name}.layers.{layer_name}.buttons] must be a table")
+            if not isinstance(l_stick_raw, dict):
+                raise ConfigError(f"[profile.{side_name}.layers.{layer_name}.stick] must be a table")
+            layers[layer_name] = LayerConfig(
+                buttons={k.lower(): v for k, v in l_buttons_raw.items()},
+                stick={k.lower(): v for k, v in l_stick_raw.items()},
+            )
 
         profiles[side_name] = ProfileConfig(
             buttons={k.lower(): v for k, v in buttons_raw.items()},
             stick={k.lower(): v for k, v in stick_raw.items()},
+            layers=layers,
         )
     return profiles
 
@@ -609,9 +653,17 @@ def _validate_profile(
     profile: ProfileConfig,
     macro_names: set[str],
     errors: list[str],
+    defined_layers: set[str] | None = None,
 ) -> None:
+    layers_scope = defined_layers if defined_layers is not None else set(profile.layers)
     for btn, spec in profile.buttons.items():
-        _validate_action_spec(f"profile.{side}.buttons.{btn}", spec, macro_names, errors)
+        _validate_action_spec(
+            f"profile.{side}.buttons.{btn}",
+            spec,
+            macro_names,
+            errors,
+            defined_layers=layers_scope,
+        )
 
     for direction, spec in profile.stick.items():
         if direction not in ALL_DIRECTIONS:
@@ -626,7 +678,35 @@ def _validate_profile(
             macro_names,
             errors,
             allow_in_stick=True,
+            defined_layers=layers_scope,
         )
+
+    for layer_name, layer in profile.layers.items():
+        if not re.match(r"^[a-zA-Z0-9_\-]+$", layer_name):
+            errors.append(f"profile.{side}.layers.{layer_name}: invalid layer name")
+        for btn, spec in layer.buttons.items():
+            _validate_action_spec(
+                f"profile.{side}.layers.{layer_name}.buttons.{btn}",
+                spec,
+                macro_names,
+                errors,
+                defined_layers=layers_scope,
+            )
+        for direction, spec in layer.stick.items():
+            if direction not in ALL_DIRECTIONS:
+                errors.append(
+                    f"profile.{side}.layers.{layer_name}.stick.{direction}: unknown direction "
+                    f"(known: {', '.join(ALL_DIRECTIONS)})"
+                )
+                continue
+            _validate_action_spec(
+                f"profile.{side}.layers.{layer_name}.stick.{direction}",
+                spec,
+                macro_names,
+                errors,
+                allow_in_stick=True,
+                defined_layers=layers_scope,
+            )
 
 
 def _validate_macro(name: str, macro: MacroDef, errors: list[str]) -> None:
@@ -646,6 +726,8 @@ def _validate_macro(name: str, macro: MacroDef, errors: list[str]) -> None:
             errors.append(f"macro.{name}.steps[{i}]: window_switch not allowed inside macros")
         elif isinstance(action, AppSwitcherAction):
             errors.append(f"macro.{name}.steps[{i}]: app_switcher not allowed inside macros")
+        elif isinstance(action, ModifierAction):
+            errors.append(f"macro.{name}.steps[{i}]: modifier not allowed inside macros")
         _check_action_keys(f"macro.{name}.steps[{i}]", action, errors)
 
 
@@ -656,6 +738,7 @@ def _validate_action_spec(
     errors: list[str],
     *,
     allow_in_stick: bool = False,
+    defined_layers: set[str] | None = None,
 ) -> None:
     try:
         action = parse_action(spec)
@@ -663,7 +746,14 @@ def _validate_action_spec(
         errors.append(f"{label}: {e}")
         return
 
-    from .actions import AppSwitcherAction, AutoAction, DelayAction, ScrollAction, TypeAction
+    from .actions import (
+        AppSwitcherAction,
+        AutoAction,
+        DelayAction,
+        ModifierAction,
+        ScrollAction,
+        TypeAction,
+    )
 
     if isinstance(action, DelayAction):
         errors.append(f"{label}: 'delay:' only makes sense inside a macro")
@@ -676,6 +766,15 @@ def _validate_action_spec(
         errors.append(f"{label}: 'auto:' is for buttons; sticks should use 'tap:' or 'repeat:'")
     if isinstance(action, AppSwitcherAction) and allow_in_stick:
         errors.append(f"{label}: 'app_switcher:' is only supported on a button")
+    if isinstance(action, ModifierAction):
+        if allow_in_stick:
+            errors.append(f"{label}: 'modifier:' is only supported on a button")
+        if defined_layers is not None and action.layer not in defined_layers:
+            errors.append(f"{label}: modifier layer {action.layer!r} is not defined")
+        if action.fallback is not None:
+            if isinstance(action.fallback, MacroRef) and action.fallback.name not in macro_names:
+                errors.append(f"{label} (fallback): macro {action.fallback.name!r} is not defined")
+            _check_action_keys(f"{label} (fallback)", action.fallback, errors)
     if isinstance(action, MacroRef) and action.name not in macro_names:
         errors.append(f"{label}: macro {action.name!r} is not defined")
 

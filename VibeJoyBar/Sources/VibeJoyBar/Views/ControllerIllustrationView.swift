@@ -19,6 +19,7 @@ enum ControllerViewMode: String, CaseIterable {
 }
 
 struct ControllerIllustrationView: View {
+    var model: AppModel? = nil
     @Binding var selection: MappingSelection?
     var controllerSide: ActiveControllerSide = .right
     @State private var mode: ControllerViewMode = .front
@@ -28,7 +29,17 @@ struct ControllerIllustrationView: View {
         VStack(spacing: 0) {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(controllerSide.displayName).font(.title3.weight(.semibold))
+                    HStack(spacing: 8) {
+                        Text(controllerSide.displayName).font(.title3.weight(.semibold))
+                        if let layer = model?.selectedLayer {
+                            Text(layer == "layer1" ? "SL 修饰层 ◖" : "\(layer) ◖")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(Color.accentColor)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.accentColor.opacity(0.15), in: Capsule())
+                        }
+                    }
                     Text(mode == .front ? "正面按键与摇杆" : (controllerSide == .right ? "肩部 R / ZR" : "肩部 L / ZL"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
@@ -312,17 +323,24 @@ struct ControllerIllustrationView: View {
         }
     }
 
+    private func isModifierKey(id: String) -> Bool {
+        guard id == "sl" else { return false }
+        let action = model?.configStore.action(for: .button("sl"), side: controllerSide) ?? ""
+        return action.hasPrefix("modifier:")
+    }
+
     // Hotspot indicators shaped around physical hardware with elegant glowing highlights & tactile depression.
     private func faceHotspot(_ id: String, x: CGFloat, y: CGFloat, in size: CGSize) -> some View {
         let isSelected = selection == .button(id)
         let isHovered = hoveredSelection == .button(id)
-        let isEmphasized = isSelected || isHovered
+        let isMod = isModifierKey(id: id)
+        let isEmphasized = isSelected || isHovered || isMod
         let btnSize = hotspotSize(for: id)
 
         return Button {
             selection = .button(id)
         } label: {
-            tactileHaloShape(for: id, isSelected: isSelected, isHovered: isHovered)
+            tactileHaloShape(for: id, isSelected: isSelected, isHovered: isHovered, isModifier: isMod)
         }
         .buttonStyle(TactileHotspotButtonStyle(isEmphasized: isEmphasized))
         .frame(width: btnSize.width + 4, height: btnSize.height + 4)
@@ -335,32 +353,32 @@ struct ControllerIllustrationView: View {
             }
         }
         .position(x: x * size.width, y: y * size.height)
-        .accessibilityLabel("\(hotspotTitle(id)) 控制")
+        .accessibilityLabel(isMod ? "SL 物理修饰键" : "\(hotspotTitle(id)) 控制")
         .accessibilityHint("打开映射检查器")
-        .help("编辑 \(hotspotTitle(id)) 映射")
+        .help(isMod ? "SL 物理修饰键（按住进入修饰层）" : "编辑 \(hotspotTitle(id)) 映射")
     }
 
     @ViewBuilder
-    private func tactileHaloShape(for id: String, isSelected: Bool, isHovered: Bool) -> some View {
+    private func tactileHaloShape(for id: String, isSelected: Bool, isHovered: Bool, isModifier: Bool = false) -> some View {
         switch id {
         case "a", "b", "x", "y":
-            buttonHalo(shape: Circle(), width: 34, height: 34, isSelected: isSelected, isHovered: isHovered)
+            buttonHalo(shape: Circle(), width: 34, height: 34, isSelected: isSelected, isHovered: isHovered, isModifier: isModifier)
         case "up", "down", "left", "right":
-            buttonHalo(shape: Circle(), width: 34, height: 34, isSelected: isSelected, isHovered: isHovered)
+            buttonHalo(shape: Circle(), width: 34, height: 34, isSelected: isSelected, isHovered: isHovered, isModifier: isModifier)
         case "plus":
-            buttonHalo(shape: RoundedRectangle(cornerRadius: 5), width: 24, height: 24, isSelected: isSelected, isHovered: isHovered)
+            buttonHalo(shape: RoundedRectangle(cornerRadius: 5), width: 24, height: 24, isSelected: isSelected, isHovered: isHovered, isModifier: isModifier)
         case "minus":
-            buttonHalo(shape: Capsule(), width: 26, height: 12, isSelected: isSelected, isHovered: isHovered)
+            buttonHalo(shape: Capsule(), width: 26, height: 12, isSelected: isSelected, isHovered: isHovered, isModifier: isModifier)
         case "home":
-            buttonHalo(shape: Circle(), width: 38, height: 38, isSelected: isSelected, isHovered: isHovered)
+            buttonHalo(shape: Circle(), width: 38, height: 38, isSelected: isSelected, isHovered: isHovered, isModifier: isModifier)
         case "capture":
-            buttonHalo(shape: RoundedRectangle(cornerRadius: 4), width: 24, height: 24, isSelected: isSelected, isHovered: isHovered)
+            buttonHalo(shape: RoundedRectangle(cornerRadius: 4), width: 24, height: 24, isSelected: isSelected, isHovered: isHovered, isModifier: isModifier)
         case "sl", "sr":
-            buttonHalo(shape: Capsule(), width: 16, height: 38, isSelected: isSelected, isHovered: isHovered)
+            buttonHalo(shape: Capsule(), width: 16, height: 38, isSelected: isSelected, isHovered: isHovered, isModifier: isModifier)
         case "r", "zr", "l", "zl":
-            buttonHalo(shape: Capsule(), width: 76, height: 32, isSelected: isSelected, isHovered: isHovered)
+            buttonHalo(shape: Capsule(), width: 76, height: 32, isSelected: isSelected, isHovered: isHovered, isModifier: isModifier)
         default:
-            buttonHalo(shape: Circle(), width: 32, height: 32, isSelected: isSelected, isHovered: isHovered)
+            buttonHalo(shape: Circle(), width: 32, height: 32, isSelected: isSelected, isHovered: isHovered, isModifier: isModifier)
         }
     }
 
@@ -369,9 +387,10 @@ struct ControllerIllustrationView: View {
         width: CGFloat,
         height: CGFloat,
         isSelected: Bool,
-        isHovered: Bool
+        isHovered: Bool,
+        isModifier: Bool = false
     ) -> some View {
-        let isEmphasized = isSelected || isHovered
+        let isEmphasized = isSelected || isHovered || isModifier
 
         return ZStack {
             // 1. Recessed dark socket rim (simulates the physical gap around the button)
@@ -383,7 +402,7 @@ struct ControllerIllustrationView: View {
                 .fill(
                     isSelected
                         ? Color.accentColor.opacity(0.24)
-                        : (isHovered ? Color.accentColor.opacity(0.12) : Color.clear)
+                        : (isHovered ? Color.accentColor.opacity(0.12) : (isModifier ? Color.purple.opacity(0.20) : Color.clear))
                 )
 
             // 3. Crisp luminous highlight outline around the real button
@@ -391,14 +410,14 @@ struct ControllerIllustrationView: View {
                 .strokeBorder(
                     isSelected
                         ? Color.accentColor
-                        : (isHovered ? Color.accentColor.opacity(0.85) : Color.clear),
-                    lineWidth: isSelected ? 2.5 : 1.8
+                        : (isHovered ? Color.accentColor.opacity(0.85) : (isModifier ? Color.purple.opacity(0.80) : Color.clear)),
+                    lineWidth: isSelected ? 2.5 : (isModifier ? 2.0 : 1.8)
                 )
         }
         .frame(width: width, height: height)
         .shadow(
-            color: isEmphasized ? Color.accentColor.opacity(isSelected ? 0.70 : 0.45) : Color.clear,
-            radius: isSelected ? 8 : 4,
+            color: isEmphasized ? (isModifier && !isSelected ? Color.purple.opacity(0.55) : Color.accentColor.opacity(isSelected ? 0.70 : 0.45)) : Color.clear,
+            radius: isSelected ? 8 : (isModifier ? 5 : 4),
             y: isSelected ? 1.5 : 1.0
         )
         .opacity(isEmphasized ? 1.0 : 0.0)

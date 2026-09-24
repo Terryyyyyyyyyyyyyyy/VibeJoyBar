@@ -26,6 +26,7 @@ from .actions import (
     DelayAction,
     HoldAction,
     MacroRef,
+    ModifierAction,
     NoAction,
     RepeatAction,
     ScrollAction,
@@ -120,6 +121,10 @@ class _MapperState:
     app_switcher_repeat: _RepeatState | None = None
     app_switcher_repeat_direction: str | None = None
     app_switcher_repeat_first: bool = True
+    # button-id -> (layer_name, fallback)
+    active_layers: dict[str, tuple[str, Action | None]] = field(default_factory=dict)
+    # button-id -> whether any input was chorded while modifier was held
+    modifier_used: dict[str, bool] = field(default_factory=dict)
 
 
 LEFT_TO_RIGHT_BUTTON_MIRROR: dict[str, str] = {
@@ -191,6 +196,13 @@ class Mapper:
         self._long_press_s = new_config.global_.long_press_ms / 1000.0
         self._precompiled = self._precompile(new_config)
 
+    @property
+    def active_layer(self) -> str | None:
+        """Name of the currently active modifier layer, if any."""
+        if self._state.active_layers:
+            return next(reversed(self._state.active_layers.values()))[0]
+        return None
+
     # ---------- Button handling ----------
 
     def _on_button(self, event: ButtonEvent) -> None:
@@ -206,6 +218,15 @@ class Mapper:
 
     def _do_press(self, button_id: str, action: Action, event: ButtonEvent) -> None:
         label = event.button
+        if isinstance(action, ModifierAction):
+            self._state.active_layers[button_id] = (action.layer, action.fallback)
+            self._state.modifier_used[button_id] = False
+            return
+
+        if self._state.active_layers:
+            for m_btn in self._state.modifier_used:
+                self._state.modifier_used[m_btn] = True
+
         if isinstance(action, NoAction):
             return
 
@@ -267,6 +288,14 @@ class Mapper:
             logger.warning("button [%s]: 'delay:' is only meaningful inside macros", label)
 
     def _do_release(self, button_id: str, action: Action, event: ButtonEvent) -> None:
+        if button_id in self._state.active_layers:
+            layer_name, fallback = self._state.active_layers.pop(button_id)
+            was_used = self._state.modifier_used.pop(button_id, False)
+            if not was_used and fallback is not None:
+                self._do_press(button_id, fallback, event)
+                self._do_release(button_id, fallback, event)
+            return
+
         # Shell actions fire on both edges so scripts can distinguish via
         # $VIBEJOY_EVENT. Handle this first so it's independent of any
         # hold / sequence bookkeeping the action may have (there isn't any,
@@ -363,6 +392,10 @@ class Mapper:
 
         if event.direction is None:
             return
+
+        if self._state.active_layers:
+            for m_btn in self._state.modifier_used:
+                self._state.modifier_used[m_btn] = True
 
         action = self._lookup_stick(event.side, event.direction)
         if action is None:
@@ -609,6 +642,20 @@ class Mapper:
     # ---------- Lookup ----------
 
     def _lookup_button(self, side: Side, button: str) -> Action | None:
+        if self._state.active_layers:
+            layer_name = next(reversed(self._state.active_layers.values()))[0]
+            action = self._precompiled.get(f"profile.{side}.layers.{layer_name}.buttons.{button}")
+            if action is not None:
+                return action
+            if side == "left":
+                mirror_btn = LEFT_TO_RIGHT_BUTTON_MIRROR.get(button)
+                if mirror_btn is not None:
+                    action = self._precompiled.get(
+                        f"profile.right.layers.{layer_name}.buttons.{mirror_btn}"
+                    )
+                    if action is not None:
+                        return action
+
         profile = self._config.profiles.get(side)
         if profile is not None and button in profile.buttons:
             return self._precompiled.get(f"profile.{side}.buttons.{button}")
@@ -620,6 +667,18 @@ class Mapper:
         return None
 
     def _lookup_stick(self, side: Side, direction: Direction) -> Action | None:
+        if self._state.active_layers:
+            layer_name = next(reversed(self._state.active_layers.values()))[0]
+            action = self._precompiled.get(f"profile.{side}.layers.{layer_name}.stick.{direction}")
+            if action is not None:
+                return action
+            if side == "left":
+                action = self._precompiled.get(
+                    f"profile.right.layers.{layer_name}.stick.{direction}"
+                )
+                if action is not None:
+                    return action
+
         profile = self._config.profiles.get(side)
         if profile is not None and direction in profile.stick:
             return self._precompiled.get(f"profile.{side}.stick.{direction}")
@@ -636,6 +695,11 @@ class Mapper:
                 out[f"profile.{side}.buttons.{btn}"] = parse_action(spec)
             for direction, spec in profile.stick.items():
                 out[f"profile.{side}.stick.{direction}"] = parse_action(spec)
+            for layer_name, layer in profile.layers.items():
+                for btn, spec in layer.buttons.items():
+                    out[f"profile.{side}.layers.{layer_name}.buttons.{btn}"] = parse_action(spec)
+                for direction, spec in layer.stick.items():
+                    out[f"profile.{side}.layers.{layer_name}.stick.{direction}"] = parse_action(spec)
         return out
 
 

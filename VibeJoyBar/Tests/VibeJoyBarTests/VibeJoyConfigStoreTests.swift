@@ -657,4 +657,85 @@ final class VibeJoyConfigStoreTests: XCTestCase {
         XCTAssertFalse(MappingDefaults.isRecommendedGlobalKey(for: .button("home")))
         XCTAssertFalse(MappingDefaults.isRecommendedGlobalKey(for: .button("capture")))
     }
+
+    @MainActor
+    func testLayerParsingAndRendering() throws {
+        let source = """
+        [global]
+        poll_hz = 100
+
+        [profile.right.buttons]
+        a = "tap:enter"
+        b = "tap:escape"
+        sl = "modifier:layer1?tap:space"
+
+        [profile.right.layers.layer1.buttons]
+        a = "combo:cmd+c"
+        b = "combo:cmd+v"
+
+        [profile.right.layers.layer1.stick]
+        up = "tap:page_up"
+        """
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try source.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let store = VibeJoyConfigStore(configURL: url)
+        XCTAssertTrue(store.availableLayers.contains("layer1"))
+
+        // Base layer actions
+        XCTAssertEqual(store.action(for: .button("a")), "tap:enter")
+        XCTAssertEqual(store.action(for: .button("sl")), "modifier:layer1?tap:space")
+
+        // Layer1 actions
+        XCTAssertEqual(store.action(for: .button("a"), layer: "layer1"), "combo:cmd+c")
+        XCTAssertEqual(store.action(for: .button("b"), layer: "layer1"), "combo:cmd+v")
+        XCTAssertEqual(store.action(for: .stick("up"), layer: "layer1"), "tap:page_up")
+
+        // Unset button in layer1 falls back to base layer
+        XCTAssertEqual(store.action(for: .button("x"), layer: "layer1"), store.action(for: .button("x")))
+
+        // Binding scope in layer
+        XCTAssertEqual(store.bindingScope(for: .button("a"), layer: "layer1"), .profileOverride)
+        XCTAssertEqual(store.bindingScope(for: .button("x"), layer: "layer1"), .inheritedFromGlobal)
+
+        // Modify layer action
+        store.setAction("combo:cmd+x", for: .button("a"), layer: "layer1")
+        XCTAssertEqual(store.action(for: .button("a"), layer: "layer1"), "combo:cmd+x")
+
+        let rendered = try store.renderedText()
+        XCTAssertTrue(rendered.contains("[profile.right.layers.layer1.buttons]"))
+        XCTAssertTrue(rendered.contains("a = \"combo:cmd+x\""))
+        XCTAssertTrue(rendered.contains("[profile.right.layers.layer1.stick]"))
+        XCTAssertTrue(rendered.contains("up = \"tap:page_up\""))
+
+        // Reset layer action
+        store.resetToGlobalDefault(selection: .button("a"), layer: "layer1")
+        XCTAssertEqual(store.action(for: .button("a"), layer: "layer1"), "tap:enter")
+        XCTAssertEqual(store.bindingScope(for: .button("a"), layer: "layer1"), .inheritedFromGlobal)
+    }
+
+    @MainActor
+    func testHUDFeedbackSetting() {
+        let model = AppModel.shared
+        let original = model.hudFeedbackEnabled
+        defer { model.setHudFeedbackEnabled(original) }
+
+        model.setHudFeedbackEnabled(false)
+        XCTAssertFalse(model.hudFeedbackEnabled)
+        XCTAssertFalse(UserDefaults.standard.bool(forKey: AppPaths.hudFeedbackKey))
+
+        model.setHudFeedbackEnabled(true)
+        XCTAssertTrue(model.hudFeedbackEnabled)
+        XCTAssertTrue(UserDefaults.standard.bool(forKey: AppPaths.hudFeedbackKey))
+    }
+
+    func testModifierActionSummaryAndPreset() {
+        XCTAssertEqual(ActionSummary.text(for: "modifier:layer1"), "物理修饰层 · layer1")
+        XCTAssertEqual(ActionSummary.text(for: "modifier:layer1?tap:space"), "物理修饰层 · layer1 (按一下 · SPACE)")
+
+        let preset = MappingPreset.common.first(where: { $0.action.hasPrefix("modifier:") })
+        XCTAssertNotNil(preset)
+        XCTAssertEqual(preset?.action, "modifier:layer1")
+    }
 }

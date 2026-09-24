@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import Observation
 
 @MainActor
@@ -25,6 +26,12 @@ final class AppModel {
             }
         }
     }
+    var hudFeedbackEnabled: Bool {
+        didSet {
+            defaults.set(hudFeedbackEnabled, forKey: AppPaths.hudFeedbackKey)
+        }
+    }
+    var selectedLayer: String? = nil
     var activityMessage = ""
     var isBusy = false
 
@@ -66,12 +73,14 @@ final class AppModel {
         let savedUVPath = defaults.string(forKey: AppPaths.uvKey) ?? AppPaths.defaultUVPath
         let savedAutoRun = defaults.object(forKey: AppPaths.autoRunKey) as? Bool ?? true
         let savedAutoSwitch = defaults.object(forKey: AppPaths.autoSwitchKey) as? Bool ?? false
+        let savedHudFeedback = defaults.object(forKey: AppPaths.hudFeedbackKey) as? Bool ?? true
 
         projectPath = savedProjectPath
         configPath = savedConfigPath
         uvPath = savedUVPath
         autoRunOnLaunch = savedAutoRun
         autoSwitchEnabled = savedAutoSwitch
+        hudFeedbackEnabled = savedHudFeedback
 
         processService = VibeJoyProcessService(
             projectURL: AppPaths.expandedURL(savedProjectPath),
@@ -91,6 +100,10 @@ final class AppModel {
 
     func setAutoSwitchEnabled(_ enabled: Bool) {
         autoSwitchEnabled = enabled
+    }
+
+    func setHudFeedbackEnabled(_ enabled: Bool) {
+        hudFeedbackEnabled = enabled
     }
 
     /// Called whenever connectedSides changes to auto-select the appropriate side.
@@ -185,6 +198,11 @@ final class AppModel {
         guard !isBusy else { return }
         isBusy = true
         activityMessage = isAutoSwitch ? "自动切换到方案 '\(name)'…" : "正在切换到方案 '\(name)'…"
+        if hudFeedbackEnabled {
+            let frontApp = routerService.currentFrontApp ?? NSWorkspace.shared.frontmostApplication?.localizedName
+            let frontBundle = routerService.currentFrontBundleId ?? NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+            HUDFeedbackService.shared.show(profileName: name, appName: frontApp, bundleId: frontBundle, isAutoSwitch: isAutoSwitch)
+        }
         Task {
             do {
                 try configStore.switchToProfile(named: name, isAutoSwitch: isAutoSwitch)

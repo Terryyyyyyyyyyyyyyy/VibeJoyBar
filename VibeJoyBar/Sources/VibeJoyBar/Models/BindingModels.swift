@@ -61,6 +61,16 @@ enum ActionSummary {
         }
         if value.hasPrefix("type:") { return "输入文字" }
         if value.hasPrefix("shell:") { return "运行脚本" }
+        if value.hasPrefix("modifier:") {
+            let spec = String(value.dropFirst(9))
+            let parts = spec.split(separator: "?", maxSplits: 1)
+            let layer = String(parts[0])
+            if parts.count > 1 {
+                let fallback = String(parts[1])
+                return "物理修饰层 · \(layer) (\(ActionSummary.text(for: fallback)))"
+            }
+            return "物理修饰层 · \(layer)"
+        }
         return value
     }
 
@@ -149,6 +159,7 @@ struct MappingPreset: Identifiable {
             title: "系统 App 切换（按住 ZR）",
             action: "app_switcher:system"
         ),
+        .init(title: "SL 修饰层 1 (按住切换第二套按键)", action: "modifier:layer1"),
         .init(title: "聚焦 Codex / ChatGPT", action: "window_switch:com.openai.codex"),
         .init(title: "Codex 对话向上翻页", action: "macro:codex_page_up"),
         .init(title: "Codex 对话向下翻页", action: "macro:codex_page_down"),

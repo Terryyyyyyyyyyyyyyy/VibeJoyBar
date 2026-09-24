@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.6
+
+- **系统级灵动 HUD 胶囊提示与物理修饰层 (Dynamic HUD & Modifier / Chord Layers)**：
+  - **Dynamic HUD 悬浮胶囊 (`HUDFeedbackService`)**：
+    - 前台切换或手动切方案时，屏幕顶部居中毫秒级滑出半透明毛玻璃灵动胶囊，展示高保真 App 图标与方案名称；
+    - 基于 macOS 原生 `NSPanel`（`canBecomeKey: false`），0 侵入无焦点，绝不抢夺用户打字与输入焦点；
+    - 带有 Apple Spring 弹性阻尼下拉动效，停留 1.5 秒后平滑淡出，支持连切防抖复用；
+    - 设置面板提供开关控制：`[✓] 切换方案时显示屏幕 HUD 胶囊提示`。
+  - **物理修饰层扩展 (Modifier / Chord Layer —— 按键数量直接翻倍)**：
+    - TOML 规范支持定义 `modifier:layer1` 动作及对应的 `[profile.<side>.layers.layer1.buttons]` 与 `[profile.<side>.layers.layer1.stick]` 映射表；
+    - 底层状态机实现修饰层按住时优先分发第二套动作，松开立即平滑回退基础层；
+    - 控制面板侧边栏与插图支持层级分段切换查看与配置，单手 Joy-Con 可用按键直接翻倍！
+
 ## 0.9.5
 
 - **前台 App 智能感知与方案自动路由切换 (App-Specific Profile Auto-Routing)**：

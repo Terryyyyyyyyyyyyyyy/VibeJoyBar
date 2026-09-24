@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from vibejoy.config import Config, GlobalConfig, MacroDef, ProfileConfig
+from vibejoy.config import Config, GlobalConfig, LayerConfig, MacroDef, ProfileConfig
 from vibejoy.events import ButtonEvent, StickEvent
 from vibejoy.mapper import Mapper, _macro_guard_passes
 
@@ -65,17 +65,21 @@ def _config(
     left_stick: dict[str, str] | None = None,
     macros: dict[str, MacroDef] | None = None,
     long_press_ms: int = 250,
+    right_layers: dict[str, LayerConfig] | None = None,
+    left_layers: dict[str, LayerConfig] | None = None,
 ) -> Config:
     profiles: dict[str, ProfileConfig] = {
         "right": ProfileConfig(
             buttons=right_buttons or {},
             stick=right_stick or {},
+            layers=right_layers or {},
         ),
     }
-    if left_buttons is not None or left_stick is not None:
+    if left_buttons is not None or left_stick is not None or left_layers is not None:
         profiles["left"] = ProfileConfig(
             buttons=left_buttons or {},
             stick=left_stick or {},
+            layers=left_layers or {},
         )
     return Config(
         global_=GlobalConfig(long_press_ms=long_press_ms),
@@ -682,4 +686,161 @@ def test_macro_override_dispatch(
     kbd.events.clear()
     mapper.on_event(ButtonEvent(side="right", button="a", pressed=True))
     assert len(kbd.events) == 0
+
+
+class TestModifiers:
+    def test_modifier_layer_chording(self) -> None:
+        kbd = FakeKeyboard()
+        win = FakeWindow()
+        cfg = _config(
+            right_buttons={"sl": "modifier:layer1", "a": "tap:enter", "b": "tap:escape"},
+            right_layers={
+                "layer1": LayerConfig(
+                    buttons={"a": "combo:cmd+c", "b": "combo:cmd+v"},
+                ),
+            },
+        )
+        mapper = Mapper(cfg, kbd, win)
+
+        # Baseline: pressing A taps enter
+        mapper.on_event(ButtonEvent(side="right", button="a", pressed=True))
+        mapper.on_event(ButtonEvent(side="right", button="a", pressed=False))
+        assert kbd.events == [("tap", "enter")]
+        kbd.events.clear()
+
+        # Press SL: enters layer1, active_layer updated, no keys emitted
+        mapper.on_event(ButtonEvent(side="right", button="sl", pressed=True))
+        assert mapper.active_layer == "layer1"
+        assert kbd.events == []
+
+        # While SL is held, press A: layer1 binding (combo cmd+c) fires
+        mapper.on_event(ButtonEvent(side="right", button="a", pressed=True))
+        mapper.on_event(ButtonEvent(side="right", button="a", pressed=False))
+        assert kbd.events == [("combo", ("cmd", "c"))]
+        kbd.events.clear()
+
+        # Release SL: active_layer returns to None, no fallback defined so nothing emitted
+        mapper.on_event(ButtonEvent(side="right", button="sl", pressed=False))
+        assert mapper.active_layer is None
+        assert kbd.events == []
+
+        # After releasing SL, A taps enter again
+        mapper.on_event(ButtonEvent(side="right", button="a", pressed=True))
+        mapper.on_event(ButtonEvent(side="right", button="a", pressed=False))
+        assert kbd.events == [("tap", "enter")]
+
+    def test_modifier_fallback_on_solo_release(self) -> None:
+        kbd = FakeKeyboard()
+        win = FakeWindow()
+        cfg = _config(
+            right_buttons={"sl": "modifier:layer1?tap:space"},
+            right_layers={
+                "layer1": LayerConfig(buttons={"a": "tap:enter"}),
+            },
+        )
+        mapper = Mapper(cfg, kbd, win)
+
+        # Press SL
+        mapper.on_event(ButtonEvent(side="right", button="sl", pressed=True))
+        assert kbd.events == []
+
+        # Release SL without pressing anything else: fallback fires!
+        mapper.on_event(ButtonEvent(side="right", button="sl", pressed=False))
+        assert kbd.events == [("tap", "space")]
+
+    def test_modifier_fallback_suppressed_when_button_chorded(self) -> None:
+        kbd = FakeKeyboard()
+        win = FakeWindow()
+        cfg = _config(
+            right_buttons={"sl": "modifier:layer1?tap:space"},
+            right_layers={
+                "layer1": LayerConfig(buttons={"a": "combo:cmd+c"}),
+            },
+        )
+        mapper = Mapper(cfg, kbd, win)
+
+        mapper.on_event(ButtonEvent(side="right", button="sl", pressed=True))
+        mapper.on_event(ButtonEvent(side="right", button="a", pressed=True))
+        mapper.on_event(ButtonEvent(side="right", button="a", pressed=False))
+        assert kbd.events == [("combo", ("cmd", "c"))]
+        kbd.events.clear()
+
+        # Releasing SL now should NOT trigger tap:space because it was chorded
+        mapper.on_event(ButtonEvent(side="right", button="sl", pressed=False))
+        assert kbd.events == []
+
+    def test_modifier_fallback_suppressed_when_stick_chorded(self) -> None:
+        kbd = FakeKeyboard()
+        win = FakeWindow()
+        cfg = _config(
+            right_buttons={"sl": "modifier:layer1?tap:space"},
+            right_stick={"up": "tap:up"},
+            right_layers={
+                "layer1": LayerConfig(stick={"up": "tap:page_up"}),
+            },
+        )
+        mapper = Mapper(cfg, kbd, win)
+
+        mapper.on_event(ButtonEvent(side="right", button="sl", pressed=True))
+        mapper.on_event(StickEvent(side="right", direction="up"))
+        assert kbd.events == [("tap", "page_up")]
+        kbd.events.clear()
+
+        mapper.on_event(StickEvent(side="right", direction=None))
+        mapper.on_event(ButtonEvent(side="right", button="sl", pressed=False))
+        assert kbd.events == []
+
+    def test_modifier_unmapped_button_in_layer_falls_back_to_base(self) -> None:
+        kbd = FakeKeyboard()
+        win = FakeWindow()
+        cfg = _config(
+            right_buttons={"sl": "modifier:layer1", "x": "tap:escape"},
+            right_layers={
+                "layer1": LayerConfig(buttons={"a": "tap:enter"}),
+            },
+        )
+        mapper = Mapper(cfg, kbd, win)
+
+        mapper.on_event(ButtonEvent(side="right", button="sl", pressed=True))
+        # X is not defined in layer1 -> falls back to base X (tap:escape)
+        mapper.on_event(ButtonEvent(side="right", button="x", pressed=True))
+        mapper.on_event(ButtonEvent(side="right", button="x", pressed=False))
+        assert kbd.events == [("tap", "escape")]
+
+    def test_modifier_left_mirroring(self) -> None:
+        kbd = FakeKeyboard()
+        win = FakeWindow()
+        cfg = _config(
+            right_buttons={"sl": "modifier:layer1", "a": "tap:enter"},
+            left_buttons={"sl": "modifier:layer1"},
+            right_layers={
+                "layer1": LayerConfig(buttons={"a": "combo:cmd+c"}),
+            },
+        )
+        mapper = Mapper(cfg, kbd, win)
+
+        # On left controller, hold SL, press 'right' (mirrors 'a' on right side)
+        mapper.on_event(ButtonEvent(side="left", button="sl", pressed=True))
+        assert mapper.active_layer == "layer1"
+
+        mapper.on_event(ButtonEvent(side="left", button="right", pressed=True))
+        mapper.on_event(ButtonEvent(side="left", button="right", pressed=False))
+        assert kbd.events == [("combo", ("cmd", "c"))]
+
+        mapper.on_event(ButtonEvent(side="left", button="sl", pressed=False))
+        assert mapper.active_layer is None
+
+    def test_release_all_clears_active_layers(self) -> None:
+        kbd = FakeKeyboard()
+        win = FakeWindow()
+        cfg = _config(
+            right_buttons={"sl": "modifier:layer1"},
+            right_layers={"layer1": LayerConfig(buttons={"a": "tap:enter"})},
+        )
+        mapper = Mapper(cfg, kbd, win)
+        mapper.on_event(ButtonEvent(side="right", button="sl", pressed=True))
+        assert mapper.active_layer == "layer1"
+
+        mapper.release_all()
+        assert mapper.active_layer is None
 

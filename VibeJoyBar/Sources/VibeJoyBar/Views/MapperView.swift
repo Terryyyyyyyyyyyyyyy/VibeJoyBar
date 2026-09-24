@@ -12,7 +12,7 @@ struct MapperView: View {
             HSplitView {
                 DashboardSidebar(model: model, selection: $selection, showingStickEditor: $showingStickEditor)
                     .frame(minWidth: 230, idealWidth: 270, maxWidth: 320)
-                ControllerIllustrationView(selection: $selection, controllerSide: model.activeControllerSide)
+                ControllerIllustrationView(model: model, selection: $selection, controllerSide: model.activeControllerSide)
                     .frame(minWidth: 470, idealWidth: 560)
                 MappingInspector(model: model, selection: $selection, showingStickEditor: $showingStickEditor)
                     .frame(minWidth: 340, idealWidth: 390, maxWidth: 450)
