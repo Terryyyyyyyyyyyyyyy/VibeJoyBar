@@ -771,12 +771,20 @@ final class VibeJoyConfigStore {
     steps   = ["scroll:down@8"]
 
     [macro.codex_previous_thread]
-    if_app  = "com.openai.codex"
+    if_app  = "com.openai.codex, com.microsoft.VSCode, Cursor"
     steps   = ["combo:cmd+shift+["]
 
+    [macro."codex_previous_thread@antigravity"]
+    if_app  = "com.google.antigravity, Antigravity"
+    steps   = ["combo:option+up"]
+
     [macro.codex_next_thread]
-    if_app  = "com.openai.codex"
+    if_app  = "com.openai.codex, com.microsoft.VSCode, Cursor"
     steps   = ["combo:cmd+shift+]"]
+
+    [macro."codex_next_thread@antigravity"]
+    if_app  = "com.google.antigravity, Antigravity"
+    steps   = ["combo:option+down"]
 
     [macro.claude_focus]
     if_app  = "Visual Studio Code"
@@ -906,7 +914,7 @@ final class VibeJoyConfigStore {
             let end = lines[(header + 1)...].firstIndex(where: { let value = $0.trimmingCharacters(in: .whitespacesAndNewlines); return value.hasPrefix("[") && value.hasSuffix("]") }) ?? lines.endIndex
             let sectionLines = lines[(header + 1)..<end]
             let keys = Set(sectionLines.compactMap { bindingKey(in: $0) })
-            if keys.contains("a") || keys.contains("b") {
+            if keys.contains("a") || keys.contains("b") || sectionLines.contains(where: { $0.contains("combo:cmd+tab") }) {
                 let defaultLeftLines = [
                     "right     = \"tap:enter\"",
                     "down      = \"tap:escape\"",
@@ -936,6 +944,19 @@ final class VibeJoyConfigStore {
                 guard let key = bindingKey(in: lines[index]), let value = bindingValue(in: lines[index]), value == "none", let action = leftStickDefaults[key] else { continue }
                 lines[index] = replacingValue(in: lines[index], with: action)
             }
+        }
+
+        if !lines.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).contains("codex_previous_thread@antigravity") }) {
+            lines.append("")
+            lines.append("[macro.\"codex_previous_thread@antigravity\"]")
+            lines.append("if_app  = \"com.google.antigravity, Antigravity\"")
+            lines.append("steps   = [\"combo:option+up\"]")
+        }
+        if !lines.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).contains("codex_next_thread@antigravity") }) {
+            lines.append("")
+            lines.append("[macro.\"codex_next_thread@antigravity\"]")
+            lines.append("if_app  = \"com.google.antigravity, Antigravity\"")
+            lines.append("steps   = [\"combo:option+down\"]")
         }
 
         return lines.joined(separator: "\n")
