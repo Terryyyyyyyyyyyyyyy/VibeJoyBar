@@ -120,6 +120,28 @@ enum MappingDefaults {
         }
     }
 
+    static func isGlobalLockedKey(for selection: MappingSelection) -> Bool {
+        switch selection {
+        case .button("r"), .button("x"), .button("y"), .button("zr"), .button("a"), .button("b"),
+             .button("l"), .button("up"), .button("left"), .button("zl"), .button("right"), .button("down"):
+            return true
+        default:
+            return false
+        }
+    }
+
+    static func isFreedKey(for selection: MappingSelection) -> Bool {
+        switch selection {
+        case .stick("up"), .stick("down"), .stick("left"), .stick("right"):
+            return true
+        case .button("plus"), .button("minus"), .button("home"), .button("capture"),
+             .button("sl"), .button("sr"), .button("r-stick"), .button("l-stick"):
+            return true
+        default:
+            return false
+        }
+    }
+
     static func isRecommendedGlobalKey(for selection: MappingSelection) -> Bool {
         switch selection {
         case .button("a"), .button("b"), .button("x"), .button("y"), .button("r"), .button("zr"), .button("plus"),
@@ -129,6 +151,145 @@ enum MappingDefaults {
             return true
         default:
             return false
+        }
+    }
+}
+
+enum KeyModifier: String, CaseIterable, Comparable, Hashable, Sendable {
+    case command = "cmd"
+    case option = "option"
+    case control = "ctrl"
+    case shift = "shift"
+
+    var symbol: String {
+        switch self {
+        case .command: return "⌘"
+        case .option: return "⌥"
+        case .control: return "⌃"
+        case .shift: return "⇧"
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .command: return "Command"
+        case .option: return "Option"
+        case .control: return "Control"
+        case .shift: return "Shift"
+        }
+    }
+
+    var standardDslName: String {
+        rawValue
+    }
+
+    private var sortOrder: Int {
+        switch self {
+        case .command: return 0
+        case .option: return 1
+        case .control: return 2
+        case .shift: return 3
+        }
+    }
+
+    static func < (lhs: KeyModifier, rhs: KeyModifier) -> Bool {
+        lhs.sortOrder < rhs.sortOrder
+    }
+}
+
+struct ShortcutKeyModel: Equatable, Hashable, Sendable {
+    var modifiers: Set<KeyModifier>
+    var key: String
+
+    init(modifiers: Set<KeyModifier> = [], key: String = "") {
+        self.modifiers = modifiers
+        self.key = Self.normalizeKey(key)
+    }
+
+    static func normalizeKey(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        switch trimmed {
+        case "return": return "enter"
+        case "esc": return "escape"
+        case "del", "backspace": return "delete"
+        case "opt", "alt": return "option"
+        default: return trimmed
+        }
+    }
+
+    var displayKeySymbol: String {
+        Self.displaySymbol(for: key)
+    }
+
+    static func displaySymbol(for key: String) -> String {
+        let norm = normalizeKey(key)
+        switch norm {
+        case "space": return "␣ Space"
+        case "enter": return "⏎ Return"
+        case "escape": return "⎋ Esc"
+        case "tab": return "⇥ Tab"
+        case "delete": return "⌫ Delete"
+        case "up": return "↑"
+        case "down": return "↓"
+        case "left": return "←"
+        case "right": return "→"
+        default:
+            if norm.hasPrefix("f") && norm.count > 1, let num = Int(norm.dropFirst()) {
+                return "F\(num)"
+            }
+            return norm.uppercased()
+        }
+    }
+
+    var dsl: String {
+        let cleanKey = Self.normalizeKey(key)
+        if cleanKey.isEmpty || cleanKey == "none" {
+            return "none"
+        }
+        if modifiers.isEmpty {
+            return "tap:\(cleanKey)"
+        }
+        let sortedMods = modifiers.sorted().map(\.standardDslName)
+        return "combo:\((sortedMods + [cleanKey]).joined(separator: "+"))"
+    }
+
+    static func parse(dsl: String) -> ShortcutKeyModel? {
+        let trimmed = dsl.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed == "none" {
+            return nil
+        }
+        if trimmed.hasPrefix("tap:") {
+            let key = String(trimmed.dropFirst(4))
+            return ShortcutKeyModel(modifiers: [], key: key)
+        }
+        if trimmed.hasPrefix("hold:") {
+            let key = String(trimmed.dropFirst(5))
+            return ShortcutKeyModel(modifiers: [], key: key)
+        }
+        if trimmed.hasPrefix("combo:") {
+            let payload = String(trimmed.dropFirst(6))
+            let parts = payload.split(separator: "+").map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            var mods: Set<KeyModifier> = []
+            var mainKey = ""
+            for part in parts {
+                if let mod = modifierFrom(string: part) {
+                    mods.insert(mod)
+                } else {
+                    mainKey = part
+                }
+            }
+            return ShortcutKeyModel(modifiers: mods, key: mainKey)
+        }
+        return nil
+    }
+
+    private static func modifierFrom(string: String) -> KeyModifier? {
+        switch string.lowercased() {
+        case "cmd", "command": return .command
+        case "opt", "option", "alt": return .option
+        case "ctrl", "control": return .control
+        case "shift": return .shift
+        default: return nil
         }
     }
 }

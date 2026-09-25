@@ -52,15 +52,104 @@ final class VibeJoyConfigStore {
                 try text.write(to: configURL, atomically: true, encoding: .utf8)
             }
             sourceText = text
+
+            let fileManager = FileManager.default
+            let baseDir = configURL.deletingLastPathComponent()
+            let activeProfileFile = baseDir.appendingPathComponent("active_profile")
+            var currentActive = "default"
+            if fileManager.fileExists(atPath: activeProfileFile.path),
+               let content = try? String(contentsOf: activeProfileFile, encoding: .utf8) {
+                let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty && !trimmed.contains("/") && !trimmed.contains("\\") && !trimmed.contains("..") && !trimmed.hasPrefix(".") {
+                    currentActive = trimmed
+                }
+            }
+            activeProfileName = currentActive
+
+            var defaultRightBtns: [String: String] = [:]
+            var defaultRightStks: [String: String] = [:]
+            var defaultLeftBtns: [String: String] = [:]
+            var defaultLeftStks: [String: String] = [:]
+
+            if currentActive != "default" {
+                let defaultURL = baseDir.appendingPathComponent("profiles/default.toml")
+                let defaultText: String
+                if fileManager.fileExists(atPath: defaultURL.path),
+                   let text = try? String(contentsOf: defaultURL, encoding: .utf8),
+                   !text.isEmpty {
+                    defaultText = text
+                } else if fileManager.fileExists(atPath: AppPaths.defaultProfileURL.path),
+                          let text = try? String(contentsOf: AppPaths.defaultProfileURL, encoding: .utf8),
+                          !text.isEmpty {
+                    defaultText = text
+                } else {
+                    defaultText = Self.fallbackDefaultConfig
+                }
+                defaultRightBtns = Self.parseSection("profile.right.buttons", from: defaultText)
+                defaultRightStks = Self.parseSection("profile.right.stick", from: defaultText)
+                defaultLeftBtns = Self.parseSection("profile.left.buttons", from: defaultText)
+                defaultLeftStks = Self.parseSection("profile.left.stick", from: defaultText)
+            }
+
             let buttons = Self.parseSection("profile.right.buttons", from: text)
             let sticks = Self.parseSection("profile.right.stick", from: text)
-            bindings = Self.knownButtons.map { ButtonBinding(button: $0, action: buttons[$0] ?? "none") }
-            stickBindings = Self.knownStickDirections.map { StickBinding(direction: $0, action: sticks[$0] ?? "none") }
+
+            bindings = Self.knownButtons.map { btn in
+                let sel = MappingSelection.button(btn)
+                let subAction = buttons[btn]
+                if currentActive == "default" {
+                    return ButtonBinding(button: btn, action: subAction ?? "none")
+                }
+                let defAction = defaultRightBtns[btn] ?? MappingDefaults.action(for: sel)
+                if MappingDefaults.isGlobalLockedKey(for: sel) {
+                    if subAction == nil || subAction == defAction || subAction == MappingDefaults.action(for: sel) {
+                        return ButtonBinding(button: btn, action: defAction)
+                    }
+                    return ButtonBinding(button: btn, action: subAction!)
+                } else {
+                    return ButtonBinding(button: btn, action: subAction ?? defAction)
+                }
+            }
+
+            stickBindings = Self.knownStickDirections.map { dir in
+                let sel = MappingSelection.stick(dir)
+                let subAction = sticks[dir]
+                if currentActive == "default" {
+                    return StickBinding(direction: dir, action: subAction ?? "none")
+                }
+                let defAction = defaultRightStks[dir] ?? MappingDefaults.action(for: sel)
+                return StickBinding(direction: dir, action: subAction ?? defAction)
+            }
 
             let leftButtons = Self.parseSection("profile.left.buttons", from: text)
             let leftSticks = Self.parseSection("profile.left.stick", from: text)
-            leftBindings = Self.knownLeftButtons.map { ButtonBinding(button: $0, action: leftButtons[$0] ?? "none") }
-            leftStickBindings = Self.knownStickDirections.map { StickBinding(direction: $0, action: leftSticks[$0] ?? "none") }
+
+            leftBindings = Self.knownLeftButtons.map { btn in
+                let sel = MappingSelection.button(btn)
+                let subAction = leftButtons[btn]
+                if currentActive == "default" {
+                    return ButtonBinding(button: btn, action: subAction ?? "none")
+                }
+                let defAction = defaultLeftBtns[btn] ?? MappingDefaults.action(for: sel)
+                if MappingDefaults.isGlobalLockedKey(for: sel) {
+                    if subAction == nil || subAction == defAction || subAction == MappingDefaults.action(for: sel) {
+                        return ButtonBinding(button: btn, action: defAction)
+                    }
+                    return ButtonBinding(button: btn, action: subAction!)
+                } else {
+                    return ButtonBinding(button: btn, action: subAction ?? defAction)
+                }
+            }
+
+            leftStickBindings = Self.knownStickDirections.map { dir in
+                let sel = MappingSelection.stick(dir)
+                let subAction = leftSticks[dir]
+                if currentActive == "default" {
+                    return StickBinding(direction: dir, action: subAction ?? "none")
+                }
+                let defAction = defaultLeftStks[dir] ?? MappingDefaults.action(for: sel)
+                return StickBinding(direction: dir, action: subAction ?? defAction)
+            }
 
             let layers = Self.parseDefinedLayers(from: text)
             availableLayers = layers
@@ -458,12 +547,10 @@ final class VibeJoyConfigStore {
         try fileManager.createDirectory(at: baseDir, withIntermediateDirectories: true)
         try text.write(to: configURL, atomically: true, encoding: .utf8)
 
-        if activeProfileName != "default" {
-            let profilesDir = baseDir.appendingPathComponent("profiles")
-            try fileManager.createDirectory(at: profilesDir, withIntermediateDirectories: true)
-            let profileURL = profilesDir.appendingPathComponent("\(activeProfileName).toml")
-            try text.write(to: profileURL, atomically: true, encoding: .utf8)
-        }
+        let profilesDir = baseDir.appendingPathComponent("profiles")
+        try fileManager.createDirectory(at: profilesDir, withIntermediateDirectories: true)
+        let profileURL = profilesDir.appendingPathComponent("\(activeProfileName).toml")
+        try text.write(to: profileURL, atomically: true, encoding: .utf8)
 
         sourceText = text; hasUnsavedChanges = false; errorMessage = nil
         refreshProfiles()
@@ -558,6 +645,13 @@ final class VibeJoyConfigStore {
 
         activeProfileName = name
         load()
+        if name != "default" {
+            if let rendered = try? renderedText() {
+                try? rendered.write(to: configURL, atomically: true, encoding: .utf8)
+                sourceText = rendered
+                hasUnsavedChanges = false
+            }
+        }
     }
 
     func deleteProfile(named name: String) throws {
@@ -614,7 +708,7 @@ final class VibeJoyConfigStore {
 
     static let fallbackDefaultConfig = """
     # VibeJoy — Joy-Con → macOS keyboard mapping.
-    # Default Profile (出厂基准方案 v0.9.6)
+    # Default Profile (出厂基准方案 v0.9.7)
 
     [meta]
     description = "出厂基准方案"

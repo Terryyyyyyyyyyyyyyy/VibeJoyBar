@@ -738,4 +738,142 @@ final class VibeJoyConfigStoreTests: XCTestCase {
         XCTAssertNotNil(preset)
         XCTAssertEqual(preset?.action, "modifier:layer1")
     }
+
+    func testGlobalLockedKeyAndFreedKey() {
+        // Right Joy-Con locked keys: r, x, y, zr, a, b
+        let rightLocked: [MappingSelection] = [
+            .button("r"), .button("x"), .button("y"), .button("zr"), .button("a"), .button("b")
+        ]
+        for sel in rightLocked {
+            XCTAssertTrue(MappingDefaults.isGlobalLockedKey(for: sel), "Expected \(sel) to be global locked")
+            XCTAssertFalse(MappingDefaults.isFreedKey(for: sel), "Expected \(sel) not to be freed")
+        }
+
+        // Left Joy-Con locked keys: l, up, left, zl, right, down
+        let leftLocked: [MappingSelection] = [
+            .button("l"), .button("up"), .button("left"), .button("zl"), .button("right"), .button("down")
+        ]
+        for sel in leftLocked {
+            XCTAssertTrue(MappingDefaults.isGlobalLockedKey(for: sel), "Expected \(sel) to be global locked")
+            XCTAssertFalse(MappingDefaults.isFreedKey(for: sel), "Expected \(sel) not to be freed")
+        }
+
+        // Freed keys: stick directions, plus, minus, home, capture, sl, sr, r-stick, l-stick
+        let freedSelections: [MappingSelection] = [
+            .stick("up"), .stick("down"), .stick("left"), .stick("right"),
+            .button("plus"), .button("minus"), .button("home"), .button("capture"),
+            .button("sl"), .button("sr"), .button("r-stick"), .button("l-stick")
+        ]
+        for sel in freedSelections {
+            XCTAssertTrue(MappingDefaults.isFreedKey(for: sel), "Expected \(sel) to be freed")
+            XCTAssertFalse(MappingDefaults.isGlobalLockedKey(for: sel), "Expected \(sel) not to be locked")
+        }
+    }
+
+    func testShortcutKeyModelParsingAndFormatting() {
+        // 1. Combo with multiple modifiers
+        let combo1 = ShortcutKeyModel.parse(dsl: "combo:cmd+shift+p")
+        XCTAssertNotNil(combo1)
+        XCTAssertEqual(combo1?.modifiers, [.command, .shift])
+        XCTAssertEqual(combo1?.key, "p")
+        XCTAssertEqual(combo1?.dsl, "combo:cmd+shift+p")
+        XCTAssertEqual(combo1?.displayKeySymbol, "P")
+
+        // 2. Single tap with space
+        let tapSpace = ShortcutKeyModel.parse(dsl: "tap:space")
+        XCTAssertNotNil(tapSpace)
+        XCTAssertEqual(tapSpace?.modifiers, [])
+        XCTAssertEqual(tapSpace?.key, "space")
+        XCTAssertEqual(tapSpace?.dsl, "tap:space")
+        XCTAssertEqual(tapSpace?.displayKeySymbol, "␣ Space")
+
+        // 3. Return / Enter
+        let tapEnter = ShortcutKeyModel.parse(dsl: "tap:enter")
+        XCTAssertNotNil(tapEnter)
+        XCTAssertEqual(tapEnter?.displayKeySymbol, "⏎ Return")
+        XCTAssertEqual(tapEnter?.dsl, "tap:enter")
+
+        // 4. Escape
+        let tapEsc = ShortcutKeyModel.parse(dsl: "tap:escape")
+        XCTAssertNotNil(tapEsc)
+        XCTAssertEqual(tapEsc?.displayKeySymbol, "⎋ Esc")
+        XCTAssertEqual(tapEsc?.dsl, "tap:escape")
+
+        // 5. Option + 2 (Type4Me Prompt)
+        let type4me = ShortcutKeyModel.parse(dsl: "combo:option+2")
+        XCTAssertNotNil(type4me)
+        XCTAssertEqual(type4me?.modifiers, [.option])
+        XCTAssertEqual(type4me?.key, "2")
+        XCTAssertEqual(type4me?.dsl, "combo:option+2")
+
+        // 6. None / empty
+        XCTAssertNil(ShortcutKeyModel.parse(dsl: "none"))
+        XCTAssertNil(ShortcutKeyModel.parse(dsl: ""))
+        let emptyModel = ShortcutKeyModel(modifiers: [], key: "")
+        XCTAssertEqual(emptyModel.dsl, "none")
+
+        // 7. Programmatic construction and modifier ordering
+        let customModel = ShortcutKeyModel(modifiers: [.shift, .command, .control], key: "k")
+        XCTAssertEqual(customModel.dsl, "combo:cmd+ctrl+shift+k")
+    }
+
+    @MainActor
+    func testCascadingInheritanceFromDefaultProfile() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let configURL = tempDir.appendingPathComponent("config.toml")
+        try VibeJoyConfigStore.fallbackDefaultConfig.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let store = VibeJoyConfigStore(configURL: configURL)
+        // In default, R is combo:option+2
+        XCTAssertEqual(store.action(for: .button("r")), "combo:option+2")
+
+        // Save as new subprofile "work"
+        try store.saveAsNewProfile(named: "work")
+        XCTAssertEqual(store.activeProfileName, "work")
+        XCTAssertEqual(store.action(for: .button("r")), "combo:option+2")
+        XCTAssertEqual(store.bindingScope(for: .button("r")), .inheritedFromGlobal)
+
+        // Switch to default and update R to tap:f18
+        try store.switchToProfile(named: "default")
+        let rIndex = try XCTUnwrap(store.bindings.firstIndex(where: { $0.button == "r" }))
+        store.setAction("tap:f18", at: rIndex)
+        try store.commit(try store.renderedText())
+        XCTAssertEqual(store.action(for: .button("r")), "tap:f18")
+
+        // Switch back to "work" - R should dynamically inherit tap:f18 from default.toml!
+        try store.switchToProfile(named: "work")
+        XCTAssertEqual(store.activeProfileName, "work")
+        XCTAssertEqual(store.action(for: .button("r")), "tap:f18")
+        XCTAssertEqual(store.bindingScope(for: .button("r")), .inheritedFromGlobal)
+    }
+
+    @MainActor
+    func testUnsavedEditsProtectionDuringAutoSwitch() throws {
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let configURL = tempDir.appendingPathComponent("config.toml")
+        try VibeJoyConfigStore.fallbackDefaultConfig.write(to: configURL, atomically: true, encoding: .utf8)
+
+        let model = AppModel.shared
+        model.configStore.updateURL(configURL)
+        try model.configStore.saveAsNewProfile(named: "browsing")
+        XCTAssertEqual(model.configStore.activeProfileName, "browsing")
+
+        // Simulate user making an uncommitted edit
+        let aIndex = try XCTUnwrap(model.configStore.bindings.firstIndex(where: { $0.button == "a" }))
+        model.configStore.setAction("combo:cmd+t", at: aIndex)
+        XCTAssertTrue(model.configStore.hasUnsavedChanges)
+
+        // When auto switch is triggered, it MUST be suppressed to protect user edits
+        model.switchToProfile(named: "default", isAutoSwitch: true)
+        XCTAssertEqual(model.configStore.activeProfileName, "browsing")
+        XCTAssertTrue(model.configStore.hasUnsavedChanges)
+        XCTAssertEqual(model.configStore.action(for: .button("a")), "combo:cmd+t")
+        XCTAssertTrue(model.activityMessage.contains("已保留未保存的映射编辑"))
+    }
 }

@@ -68,6 +68,17 @@ final class AppRouterService {
 
     func routeApp(bundleId: String, appName: String) {
         guard let model, model.autoSwitchEnabled else { return }
+        let currentPID = ProcessInfo.processInfo.processIdentifier
+        let currentBundle = Bundle.main.bundleIdentifier
+        if let front = NSWorkspace.shared.frontmostApplication {
+            if front.processIdentifier == currentPID || (currentBundle != nil && front.bundleIdentifier == currentBundle) {
+                return
+            }
+        }
+        if currentBundle != nil && bundleId == currentBundle {
+            return
+        }
+
         currentFrontApp = appName
         currentFrontBundleId = bundleId
 

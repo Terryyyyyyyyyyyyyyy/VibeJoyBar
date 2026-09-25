@@ -68,7 +68,7 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 LabeledContent("Python 内核") {
-                    Text("vibejoy 0.9.6")
+                    Text("vibejoy 0.9.7")
                         .foregroundStyle(.secondary)
                 }
             }
@@ -90,10 +90,10 @@ struct SettingsView: View {
     }
 
     private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.9.6"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.9.7"
     }
 
     private var appBuild: String {
-        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "7"
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "8"
     }
 }

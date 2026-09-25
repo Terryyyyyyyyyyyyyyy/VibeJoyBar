@@ -196,6 +196,10 @@ final class AppModel {
 
     func switchToProfile(named name: String, isAutoSwitch: Bool = false) {
         guard !isBusy else { return }
+        if isAutoSwitch && configStore.hasUnsavedChanges {
+            activityMessage = "已保留未保存的映射编辑，暂停自动切换方案"
+            return
+        }
         isBusy = true
         activityMessage = isAutoSwitch ? "自动切换到方案 '\(name)'…" : "正在切换到方案 '\(name)'…"
         if hudFeedbackEnabled {

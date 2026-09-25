@@ -1,9 +1,70 @@
 import SwiftUI
 
+enum ActionModeTab: String, CaseIterable, Identifiable {
+    case recorder = "recorder"
+    case presets = "presets"
+    case type4me = "type4me"
+    case system = "system"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .recorder: "⌨️ 快捷键"
+        case .presets: "⭐️ 常用预设"
+        case .type4me: "🎙️ Type4Me"
+        case .system: "🖥️ 系统与扩展"
+        }
+    }
+}
+
+struct CuratedPreset: Identifiable {
+    let title: String
+    let subtitle: String
+    let action: String
+    let icon: String
+
+    var id: String { action }
+
+    static let commonProductivity: [CuratedPreset] = [
+        .init(title: "复制", subtitle: "Command + C", action: "combo:cmd+c", icon: "doc.on.doc"),
+        .init(title: "粘贴", subtitle: "Command + V", action: "combo:cmd+v", icon: "doc.on.clipboard"),
+        .init(title: "剪切", subtitle: "Command + X", action: "combo:cmd+x", icon: "scissors"),
+        .init(title: "撤销", subtitle: "Command + Z", action: "combo:cmd+z", icon: "arrow.uturn.backward"),
+        .init(title: "重做", subtitle: "Shift + Command + Z", action: "combo:cmd+shift+z", icon: "arrow.uturn.forward"),
+        .init(title: "保存", subtitle: "Command + S", action: "combo:cmd+s", icon: "square.and.arrow.down"),
+        .init(title: "关闭标签", subtitle: "Command + W", action: "combo:cmd+w", icon: "xmark.circle"),
+        .init(title: "查找", subtitle: "Command + F", action: "combo:cmd+f", icon: "magnifyingglass"),
+        .init(title: "全选", subtitle: "Command + A", action: "combo:cmd+a", icon: "selection.pin.in.out"),
+        .init(title: "刷新", subtitle: "Command + R", action: "combo:cmd+r", icon: "arrow.clockwise"),
+    ]
+
+    static let type4meSuite: [CuratedPreset] = [
+        .init(title: "Type4Me Prompt 优化", subtitle: "Option + 2 · 录音长按转写并重构 Prompt", action: "combo:option+2", icon: "waveform.and.mic"),
+        .init(title: "Type4Me 快速润色", subtitle: "Option + 0 · 纠错语病与学术/口语润色", action: "combo:option+0", icon: "sparkles"),
+        .init(title: "Type4Me 极速输出", subtitle: "Option + 1 · 原汁原味纯净转写", action: "combo:option+1", icon: "bolt.fill"),
+        .init(title: "Type4Me 润色模式", subtitle: "F18 · 单键直发 Type4Me 润色", action: "tap:f18", icon: "function"),
+        .init(title: "Type4Me 快速模式", subtitle: "F19 · 单键直发 Type4Me 快速转写", action: "tap:f19", icon: "function"),
+    ]
+
+    static let systemAndLayers: [CuratedPreset] = [
+        .init(title: "系统 App 切换器", subtitle: "app_switcher:system · 按住后摇杆左右轮选", action: "app_switcher:system", icon: "arrow.left.arrow.right"),
+        .init(title: "聚焦 Codex / ChatGPT", subtitle: "com.openai.codex · 快速呼出并聚焦", action: "window_switch:com.openai.codex", icon: "macwindow"),
+        .init(title: "SL 修饰层 1", subtitle: "modifier:layer1 · 按住切换至第二套扩展动作", action: "modifier:layer1", icon: "square.2.layers.3d"),
+        .init(title: "Codex 向上翻页", subtitle: "macro:codex_page_up · 向上滚动一页", action: "macro:codex_page_up", icon: "chevron.up.circle"),
+        .init(title: "Codex 向下翻页", subtitle: "macro:codex_page_down · 向下滚动一页", action: "macro:codex_page_down", icon: "chevron.down.circle"),
+        .init(title: "Codex 上一对话", subtitle: "macro:codex_previous_thread · 切换到上一对话", action: "macro:codex_previous_thread", icon: "arrow.backward.circle"),
+        .init(title: "Codex 下一对话", subtitle: "macro:codex_next_thread · 切换到下一对话", action: "macro:codex_next_thread", icon: "arrow.forward.circle"),
+        .init(title: "安全停用", subtitle: "none · 不发送任何输入", action: "none", icon: "nosign"),
+    ]
+}
+
 struct MappingInspector: View {
     @Bindable var model: AppModel
     @Binding var selection: MappingSelection?
     @Binding var showingStickEditor: Bool
+
+    @State private var activeTab: ActionModeTab = .recorder
 
     var body: some View {
         ScrollView {
@@ -17,6 +78,22 @@ struct MappingInspector: View {
             .padding(22)
         }
         .background(.quaternary.opacity(0.18))
+        .onAppear { updateTab(for: selection) }
+        .onChange(of: selection) { _, newSel in updateTab(for: newSel) }
+    }
+
+    private func updateTab(for sel: MappingSelection?) {
+        guard let sel else { return }
+        let act = model.configStore.action(for: sel, layer: model.selectedLayer, side: model.activeControllerSide)
+        if act == "combo:option+2" || act == "combo:option+0" || act == "combo:option+1" || act == "tap:f18" || act == "tap:f19" {
+            activeTab = .type4me
+        } else if act.hasPrefix("app_switcher:") || act.hasPrefix("window_switch:") || act.hasPrefix("modifier:") || act.hasPrefix("macro:") || act == "none" {
+            activeTab = .system
+        } else if CuratedPreset.commonProductivity.contains(where: { $0.action == act }) {
+            activeTab = .presets
+        } else {
+            activeTab = .recorder
+        }
     }
 
     @ViewBuilder private func inspector(_ selected: MappingSelection) -> some View {
@@ -37,72 +114,158 @@ struct MappingInspector: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
 
+        let isGlobalLocked = MappingDefaults.isGlobalLockedKey(for: selected)
+        let isFreed = MappingDefaults.isFreedKey(for: selected)
         let scope = model.configStore.bindingScope(for: selected, layer: model.selectedLayer, side: model.activeControllerSide)
-        let isRecommendedGlobal = MappingDefaults.isRecommendedGlobalKey(for: selected)
+        let isDefaultProfile = model.configStore.activeProfileName == "default"
+        let baseAction = model.configStore.globalBaselineAction(for: selected, layer: model.selectedLayer, side: model.activeControllerSide)
+        let currentAction = model.configStore.action(for: selected, layer: model.selectedLayer, side: model.activeControllerSide)
 
+        // MARK: - Scope & Inheritance Box
         GroupBox {
             VStack(alignment: .leading, spacing: 8) {
-                switch scope {
-                case .globalBaseline:
+                if model.selectedLayer != nil {
                     HStack(spacing: 6) {
-                        Text("🌐 全局出厂基准")
+                        Text(scope == .profileOverride ? "⚡️ 修饰层专属动作" : "🔒 继承自基础层")
                             .font(.caption.weight(.bold))
+                            .foregroundStyle(scope == .profileOverride ? Color.accentColor : .secondary)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
-                            .background(Color.secondary.opacity(0.15), in: Capsule())
+                            .background((scope == .profileOverride ? Color.accentColor : Color.secondary).opacity(0.12), in: Capsule())
+
                         Spacer()
-                    }
-                    Text("当前正在配置全局基准方案。此处的改动将作为所有子方案的默认底座。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
 
-                case .inheritedFromGlobal:
-                    HStack(spacing: 6) {
-                        Text(model.selectedLayer != nil ? "🔒 继承自基础层" : "🔒 继承自全局基准")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Color.secondary.opacity(0.12), in: Capsule())
-
-                        if isRecommendedGlobal {
-                            Text("推荐全局保持一致")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                        if scope == .profileOverride {
+                            Button("移除修饰覆盖") {
+                                model.configStore.resetToGlobalDefault(selection: selected, layer: model.selectedLayer, side: model.activeControllerSide)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
                         }
-                        Spacer()
                     }
-                    Text(model.selectedLayer != nil
-                        ? "当前修饰层未单独覆盖该按键，触发时将回退执行基础层动作。"
-                        : "当前按键继承自全局方案 (default)，与全局基准保持同步。")
+                    Text(scope == .profileOverride
+                        ? "此按键在修饰层 (\(model.selectedLayer!)) 中配置了专属动作，按住修饰键时生效。"
+                        : "修饰层未单独覆盖该按键，触发时将回退执行基础层动作。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-
-                case .profileOverride:
+                } else if isGlobalLocked {
                     HStack(spacing: 6) {
-                        Text(model.selectedLayer != nil ? "⚡️ 修饰层专属覆盖" : "🎨 本方案专属覆盖")
+                        Image(systemName: "lock.fill")
+                            .foregroundStyle(Color.accentColor)
+                        Text("🔒 全局锁定键 · Type4Me 与核心操作跨方案一致生效")
                             .font(.caption.weight(.bold))
                             .foregroundStyle(Color.accentColor)
+                        Spacer()
+                    }
+                    if isDefaultProfile {
+                        Text("当前为全局出厂基准方案 (default)。此处的配置作为核心基准，在所有应用中统一生效。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text("Type4Me 与系统核心按键在所有方案中默认锁定并贯穿生效，彻底杜绝配置割裂。如需调整，请前往 default 基准方案统一配置。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if scope == .profileOverride {
+                            HStack {
+                                Text("当前检测到子方案专属定制")
+                                    .font(.caption2)
+                                    .foregroundStyle(.orange)
+                                Spacer()
+                                Button("恢复全局锁定基准") {
+                                    model.configStore.resetToGlobalDefault(selection: selected, layer: model.selectedLayer, side: model.activeControllerSide)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                            }
+                        }
+                    }
+                } else if isFreed {
+                    HStack(spacing: 6) {
+                        Text("📱 自由释放键")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.primary)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
-                            .background(Color.accentColor.opacity(0.15), in: Capsule())
+                            .background(Color.primary.opacity(0.08), in: Capsule())
 
                         Spacer()
 
-                        Button(model.selectedLayer != nil ? "移除修饰覆盖" : "恢复继承全局") {
-                            model.configStore.resetToGlobalDefault(selection: selected, layer: model.selectedLayer, side: model.activeControllerSide)
+                        if !isDefaultProfile {
+                            HStack(spacing: 4) {
+                                if scope == .inheritedFromGlobal {
+                                    Button {
+                                        model.configStore.resetToGlobalDefault(selection: selected, layer: model.selectedLayer, side: model.activeControllerSide)
+                                    } label: {
+                                        HStack(spacing: 3) {
+                                            Image(systemName: "checkmark")
+                                            Text("继承全局基准")
+                                        }
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .controlSize(.small)
+                                } else {
+                                    Button {
+                                        model.configStore.resetToGlobalDefault(selection: selected, layer: model.selectedLayer, side: model.activeControllerSide)
+                                    } label: {
+                                        Text("继承全局基准")
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                }
+
+                                if scope == .profileOverride {
+                                    Button {
+                                    } label: {
+                                        HStack(spacing: 3) {
+                                            Image(systemName: "checkmark")
+                                            Text("为当前应用专属定制")
+                                        }
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .controlSize(.small)
+                                } else {
+                                    Button {
+                                        model.configStore.setAction(currentAction, for: selected, layer: model.selectedLayer, side: model.activeControllerSide)
+                                    } label: {
+                                        Text("为当前应用专属定制")
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                }
+                            }
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
                     }
-                    Text(model.selectedLayer != nil
-                        ? "此按键已在修饰层 (\(model.selectedLayer!)) 中配置专用动作，按下修饰键时生效。"
-                        : "此按键已在当前方案 (\(model.configStore.activeProfileName)) 中单独定制，不再受全局默认值影响。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+
+                    if isDefaultProfile {
+                        Text("当前为全局基准方案。此处配置全局基准动作，各 App 子方案若未单独定制将默认继承此动作。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else if scope == .inheritedFromGlobal {
+                        Text("当前继承全局基准 (\(ActionSummary.text(for: baseAction)))，随全局方案实时同步更新。点击右侧按钮可为本应用专属定制。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text("此按键已为当前方案 (\(model.configStore.activeProfileName)) 单独定制，不受全局默认值变动影响。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                } else {
+                    if isDefaultProfile {
+                        Text("当前正在配置全局基准方案。此处的改动将作为所有子方案的默认底座。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(scope == .inheritedFromGlobal ? "当前按键继承自全局基准方案。" : "已在当前方案中专属覆盖。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -111,15 +274,16 @@ struct MappingInspector: View {
             Text("按键归属与作用域").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
         }
 
+        // MARK: - Current Action Summary
         GroupBox {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "command")
                         .foregroundStyle(Color.accentColor)
-                    Text(ActionSummary.text(for: model.configStore.action(for: selected, layer: model.selectedLayer, side: model.activeControllerSide)))
+                    Text(ActionSummary.text(for: currentAction))
                         .font(.body.weight(.semibold))
                 }
-                if model.configStore.action(for: selected, layer: model.selectedLayer, side: model.activeControllerSide) == "none" {
+                if currentAction == "none" {
                     Text("安全停用 · 不会发送输入").font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -129,14 +293,28 @@ struct MappingInspector: View {
             Text("当前动作").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
         }
 
-        VStack(alignment: .leading, spacing: 8) {
-            Text("常用预设").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-            Picker("选择预设", selection: presetBinding(for: selected)) {
-                ForEach(MappingPreset.common) { preset in Text(preset.title).tag(preset.action) }
+        // MARK: - Action Mode Tab Selector
+        VStack(alignment: .leading, spacing: 10) {
+            Picker("", selection: $activeTab) {
+                ForEach(ActionModeTab.allCases) { tab in
+                    Text(tab.title).tag(tab)
+                }
             }
-            .labelsHidden()
+            .pickerStyle(.segmented)
+
+            switch activeTab {
+            case .recorder:
+                ShortcutRecorderView(action: actionBinding(for: selected))
+            case .presets:
+                presetGridView(presets: CuratedPreset.commonProductivity, selected: selected)
+            case .type4me:
+                presetGridView(presets: CuratedPreset.type4meSuite, selected: selected)
+            case .system:
+                presetGridView(presets: CuratedPreset.systemAndLayers, selected: selected)
+            }
         }
 
+        // MARK: - Advanced Raw DSL
         DisclosureGroup("高级设置") {
             VStack(alignment: .leading, spacing: 7) {
                 Text("支持原始 DSL 动作字符串").font(.caption).foregroundStyle(.secondary)
@@ -198,6 +376,50 @@ struct MappingInspector: View {
                 .buttonStyle(.bordered)
         }
         .font(.caption)
+    }
+
+    @ViewBuilder
+    private func presetGridView(presets: [CuratedPreset], selected: MappingSelection) -> some View {
+        let current = model.configStore.action(for: selected, layer: model.selectedLayer, side: model.activeControllerSide)
+        VStack(spacing: 6) {
+            ForEach(presets) { preset in
+                let isCurrent = current == preset.action
+                Button {
+                    model.configStore.setAction(preset.action, for: selected, layer: model.selectedLayer, side: model.activeControllerSide)
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: preset.icon)
+                            .font(.body)
+                            .foregroundStyle(isCurrent ? Color.accentColor : Color.secondary)
+                            .frame(width: 20)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(preset.title)
+                                .font(.callout.weight(.medium))
+                                .foregroundStyle(.primary)
+                            Text(preset.subtitle)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        if isCurrent {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(Color.accentColor)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(isCurrent ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .strokeBorder(isCurrent ? Color.accentColor.opacity(0.4) : Color.primary.opacity(0.08), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     private func selectionTitle(_ selected: MappingSelection) -> String {
