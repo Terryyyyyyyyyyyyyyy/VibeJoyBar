@@ -31,7 +31,7 @@ struct ShortcutRecorderView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // Main recording / preview card
+            // MARK: - Main recording / preview card
             GroupBox {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
@@ -67,7 +67,7 @@ struct ShortcutRecorderView: View {
 
                             Spacer()
 
-                            if currentModel != nil {
+                            if action != "none" && !action.isEmpty {
                                 Button("清除", systemImage: "xmark.circle") {
                                     clearShortcut()
                                 }
@@ -83,7 +83,7 @@ struct ShortcutRecorderView: View {
                         if isRecording {
                             if !livePressedModifiers.isEmpty {
                                 ForEach(livePressedModifiers.sorted(), id: \.self) { mod in
-                                    KeyBadgeView(symbol: mod.symbol, text: mod.displayName, isHighlighted: true)
+                                    KeyBadgeView(symbol: mod.symbol, text: mod.compactName, isHighlighted: true)
                                 }
                                 Text("+")
                                     .font(.title3.weight(.bold))
@@ -93,9 +93,18 @@ struct ShortcutRecorderView: View {
                                 .font(.callout)
                                 .foregroundStyle(.tertiary)
                                 .padding(.vertical, 4)
+                        } else if action.hasPrefix("type:") {
+                            let text = String(action.dropFirst(5))
+                            HStack(spacing: 6) {
+                                Image(systemName: "text.cursor")
+                                    .foregroundStyle(Color.accentColor)
+                                Text("文本短语: \"\(text)\"")
+                                    .font(.callout.weight(.medium))
+                            }
+                            .padding(.vertical, 4)
                         } else if let model = currentModel, !model.key.isEmpty {
                             ForEach(model.modifiers.sorted(), id: \.self) { mod in
-                                KeyBadgeView(symbol: mod.symbol, text: mod.displayName)
+                                KeyBadgeView(symbol: mod.symbol, text: mod.compactName)
                             }
                             if !model.modifiers.isEmpty {
                                 Text("+")
@@ -103,6 +112,15 @@ struct ShortcutRecorderView: View {
                                     .foregroundStyle(.secondary)
                             }
                             KeyBadgeView(symbol: "", text: model.displayKeySymbol, isMainKey: true)
+
+                            if model.modifiers.isEmpty {
+                                Text(model.triggerStyle.displayName)
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 3)
+                                    .background(Color.secondary.opacity(0.12), in: Capsule())
+                            }
                         } else {
                             Text("未设置按键或已停用 (none)")
                                 .font(.callout)
@@ -116,41 +134,107 @@ struct ShortcutRecorderView: View {
 
                     // Record button
                     if !isRecording {
-                        Button {
-                            startRecording()
-                        } label: {
-                            HStack {
-                                Image(systemName: "record.circle")
-                                    .foregroundStyle(Color.red)
-                                Text("点击开始录制快捷键")
-                                    .fontWeight(.medium)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Button {
+                                startRecording()
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "record.circle")
+                                        .font(.title3)
+                                        .foregroundStyle(Color.red)
+                                    Text("点击开始录制快捷键")
+                                        .font(.headline)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
                             }
-                            .frame(maxWidth: .infinity)
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.large)
+
+                            Text("按下键盘任意单键或组合键（如 ⌘C、⌥Space、F19 等），自动捕获并完成配置。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.regular)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 2)
+            } label: {
+                Text("快捷键捕获").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }
 
-            // Point-and-click Tuning Section
+            // MARK: - Trigger Style Selector
+            GroupBox {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "hand.tap")
+                            .foregroundStyle(Color.accentColor)
+                        Text("按键触发模式")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Picker("触发方式", selection: Binding(
+                        get: { currentModel?.triggerStyle ?? .tap },
+                        set: { newStyle in
+                            if var model = currentModel {
+                                model.triggerStyle = newStyle
+                                action = model.dsl
+                            } else {
+                                action = "\(newStyle.rawValue):enter"
+                            }
+                        }
+                    )) {
+                        ForEach(TriggerStyle.allCases) { style in
+                            Text(style.displayName).tag(style)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    if let model = currentModel, !model.modifiers.isEmpty {
+                        Text("说明：组合键（含 ⌘/⌥/⌃/⇧）默认即时触发；长按/连发适用于单键（如 Space、Enter、方向键等）。")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 2)
+            } label: {
+                Text("触发方式").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            }
+
+            // MARK: - Point-and-click Tuning Section
             GroupBox {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("手动调节修饰键与按键")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                    HStack {
+                        Image(systemName: "slider.horizontal.2.square")
+                            .foregroundStyle(Color.accentColor)
+                        Text("手动调节修饰键与按键")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
 
-                    // Modifier Toggles
-                    HStack(spacing: 8) {
+                    // Modifier Toggles in 2x2 Grid
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                         ForEach(KeyModifier.allCases, id: \.self) { mod in
                             let isSelected = currentModel?.modifiers.contains(mod) ?? false
                             Toggle(isOn: Binding(
                                 get: { isSelected },
                                 set: { toggleModifier(mod, active: $0) }
                             )) {
-                                Text("\(mod.symbol) \(mod.displayName)")
-                                    .font(.caption.weight(.medium))
+                                HStack {
+                                    Text(mod.compactName)
+                                        .font(.callout.weight(.medium))
+                                    Spacer()
+                                    if isSelected {
+                                        Image(systemName: "checkmark")
+                                            .font(.caption.weight(.bold))
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
                             }
                             .toggleStyle(.button)
                             .buttonStyle(.bordered)
@@ -162,7 +246,7 @@ struct ShortcutRecorderView: View {
 
                     // Common Key Picker
                     HStack(spacing: 10) {
-                        Text("选择键值")
+                        Text("选择主键")
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
@@ -213,9 +297,71 @@ struct ShortcutRecorderView: View {
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 2)
+            } label: {
+                Text("手动微调").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            }
+
+            // MARK: - Text Phrase Section
+            GroupBox {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "text.cursor")
+                            .foregroundStyle(Color.accentColor)
+                        Text("文本短语直发")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if action.hasPrefix("type:") {
+                            Text("当前生效中")
+                                .font(.caption2.weight(.bold))
+                                .foregroundStyle(Color.accentColor)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.accentColor.opacity(0.12), in: Capsule())
+                        }
+                    }
+
+                    Text("按压此按键时直接打出一串预设文本或常用短语（如邮箱、问候语、代码模板等）：")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 8) {
+                        TextField("输入要直发的文本内容…", text: Binding(
+                            get: {
+                                if action.hasPrefix("type:") {
+                                    return String(action.dropFirst(5))
+                                }
+                                return ""
+                            },
+                            set: { newText in
+                                if newText.isEmpty {
+                                    action = "none"
+                                } else {
+                                    action = "type:\(newText)"
+                                }
+                            }
+                        ))
+                        .textFieldStyle(.roundedBorder)
+
+                        if action.hasPrefix("type:") && action != "type:" {
+                            Button("清除") {
+                                action = "none"
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 2)
+            } label: {
+                Text("文本直发").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onDisappear {
             stopRecording()
         }
@@ -249,7 +395,8 @@ struct ShortcutRecorderView: View {
 
         if event.type == .keyDown {
             if let keyName = event.vibejoyKeyName {
-                let model = ShortcutKeyModel(modifiers: mods, key: keyName)
+                let currentStyle = currentModel?.triggerStyle ?? .tap
+                let model = ShortcutKeyModel(modifiers: mods, key: keyName, triggerStyle: currentStyle)
                 action = model.dsl
                 stopRecording()
             }
@@ -258,19 +405,21 @@ struct ShortcutRecorderView: View {
 
     private func toggleModifier(_ modifier: KeyModifier, active: Bool) {
         var mods = currentModel?.modifiers ?? []
-        let key = currentModel?.key ?? ""
+        let key = currentModel?.key.isEmpty == false ? currentModel!.key : "enter"
+        let currentStyle = currentModel?.triggerStyle ?? .tap
         if active {
             mods.insert(modifier)
         } else {
             mods.remove(modifier)
         }
-        let updated = ShortcutKeyModel(modifiers: mods, key: key)
+        let updated = ShortcutKeyModel(modifiers: mods, key: key, triggerStyle: currentStyle)
         action = updated.dsl
     }
 
     private func selectKey(_ key: String) {
         let mods = currentModel?.modifiers ?? []
-        let updated = ShortcutKeyModel(modifiers: mods, key: key)
+        let currentStyle = currentModel?.triggerStyle ?? .tap
+        let updated = ShortcutKeyModel(modifiers: mods, key: key, triggerStyle: currentStyle)
         action = updated.dsl
     }
 

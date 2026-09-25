@@ -815,6 +815,21 @@ final class VibeJoyConfigStoreTests: XCTestCase {
         // 7. Programmatic construction and modifier ordering
         let customModel = ShortcutKeyModel(modifiers: [.shift, .command, .control], key: "k")
         XCTAssertEqual(customModel.dsl, "combo:cmd+ctrl+shift+k")
+
+        // 8. Hold and Repeat trigger styles
+        let holdSpace = ShortcutKeyModel.parse(dsl: "hold:space")
+        XCTAssertNotNil(holdSpace)
+        XCTAssertEqual(holdSpace?.triggerStyle, .hold)
+        XCTAssertEqual(holdSpace?.dsl, "hold:space")
+
+        let repeatUp = ShortcutKeyModel.parse(dsl: "repeat:up@100")
+        XCTAssertNotNil(repeatUp)
+        XCTAssertEqual(repeatUp?.triggerStyle, .repeat)
+        XCTAssertEqual(repeatUp?.key, "up")
+        XCTAssertEqual(repeatUp?.dsl, "repeat:up")
+
+        let manualRepeat = ShortcutKeyModel(modifiers: [], key: "down", triggerStyle: .repeat)
+        XCTAssertEqual(manualRepeat.dsl, "repeat:down")
     }
 
     @MainActor

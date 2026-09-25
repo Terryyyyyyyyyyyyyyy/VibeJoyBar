@@ -11,17 +11,17 @@ struct MapperView: View {
             Divider()
             HSplitView {
                 DashboardSidebar(model: model, selection: $selection, showingStickEditor: $showingStickEditor)
-                    .frame(minWidth: 230, idealWidth: 270, maxWidth: 320)
+                    .frame(minWidth: 210, idealWidth: 240, maxWidth: 280)
                 ControllerIllustrationView(model: model, selection: $selection, controllerSide: model.activeControllerSide)
-                    .frame(minWidth: 470, idealWidth: 560)
+                    .frame(minWidth: 320, idealWidth: 370, maxWidth: 440)
                 MappingInspector(model: model, selection: $selection, showingStickEditor: $showingStickEditor)
-                    .frame(minWidth: 340, idealWidth: 390, maxWidth: 450)
+                    .frame(minWidth: 420, idealWidth: 500)
             }
             .frame(maxHeight: .infinity)
             Divider()
             DashboardFooter(model: model)
         }
-        .frame(minWidth: 1100, idealWidth: 1180, minHeight: 700, idealHeight: 760)
+        .frame(minWidth: 1140, idealWidth: 1220, minHeight: 700, idealHeight: 760)
         .background(.regularMaterial)
         .sheet(isPresented: $showingStickEditor) {
             JoystickEditorView(model: model, selection: $selection)

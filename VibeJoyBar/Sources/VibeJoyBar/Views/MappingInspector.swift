@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum ActionModeTab: String, CaseIterable, Identifiable {
-    case recorder = "recorder"
+    case custom = "custom"
     case presets = "presets"
     case type4me = "type4me"
     case system = "system"
@@ -10,8 +10,8 @@ enum ActionModeTab: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .recorder: "⌨️ 快捷键"
-        case .presets: "⭐️ 常用预设"
+        case .custom: "🎯 自定义设计"
+        case .presets: "⭐️ 常用推荐"
         case .type4me: "🎙️ Type4Me"
         case .system: "🖥️ 系统与扩展"
         }
@@ -64,7 +64,7 @@ struct MappingInspector: View {
     @Binding var selection: MappingSelection?
     @Binding var showingStickEditor: Bool
 
-    @State private var activeTab: ActionModeTab = .recorder
+    @State private var activeTab: ActionModeTab = .custom
 
     var body: some View {
         ScrollView {
@@ -75,25 +75,11 @@ struct MappingInspector: View {
                     ContentUnavailableView("选择一个控制", systemImage: "cursorarrow.click")
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(22)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(.quaternary.opacity(0.18))
-        .onAppear { updateTab(for: selection) }
-        .onChange(of: selection) { _, newSel in updateTab(for: newSel) }
-    }
-
-    private func updateTab(for sel: MappingSelection?) {
-        guard let sel else { return }
-        let act = model.configStore.action(for: sel, layer: model.selectedLayer, side: model.activeControllerSide)
-        if act == "combo:option+2" || act == "combo:option+0" || act == "combo:option+1" || act == "tap:f18" || act == "tap:f19" {
-            activeTab = .type4me
-        } else if act.hasPrefix("app_switcher:") || act.hasPrefix("window_switch:") || act.hasPrefix("modifier:") || act.hasPrefix("macro:") || act == "none" {
-            activeTab = .system
-        } else if CuratedPreset.commonProductivity.contains(where: { $0.action == act }) {
-            activeTab = .presets
-        } else {
-            activeTab = .recorder
-        }
     }
 
     @ViewBuilder private func inspector(_ selected: MappingSelection) -> some View {
@@ -303,7 +289,7 @@ struct MappingInspector: View {
             .pickerStyle(.segmented)
 
             switch activeTab {
-            case .recorder:
+            case .custom:
                 ShortcutRecorderView(action: actionBinding(for: selected))
             case .presets:
                 presetGridView(presets: CuratedPreset.commonProductivity, selected: selected)
@@ -313,6 +299,7 @@ struct MappingInspector: View {
                 presetGridView(presets: CuratedPreset.systemAndLayers, selected: selected)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
 
         // MARK: - Advanced Raw DSL
         DisclosureGroup("高级设置") {
@@ -323,8 +310,10 @@ struct MappingInspector: View {
                     .lineLimit(1...3)
                     .font(.system(.body, design: .monospaced))
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.top, 5)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
 
         // Stick-specific: deadzone visualizer + editor shortcut
         if case .stick = selected {

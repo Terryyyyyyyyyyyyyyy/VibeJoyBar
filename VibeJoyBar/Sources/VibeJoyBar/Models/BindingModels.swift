@@ -55,11 +55,20 @@ enum ActionSummary {
             let keys = String(value.dropFirst(6)).split(separator: "+").map { keyName(String($0)) }
             return "组合键 · \(keys.joined(separator: " + "))"
         }
+        if value.hasPrefix("repeat:") {
+            let spec = String(value.dropFirst(7))
+            let parts = spec.split(separator: "@")
+            let key = keyName(String(parts[0]))
+            return "连发 · \(key)"
+        }
         if value.hasPrefix("window_switch:") {
             let app = String(value.dropFirst(14)).split(separator: ",").first.map(String.init) ?? "应用"
             return "聚焦 · \(app)"
         }
-        if value.hasPrefix("type:") { return "输入文字" }
+        if value.hasPrefix("type:") {
+            let text = String(value.dropFirst(5))
+            return text.isEmpty ? "输入文字" : "输入文字 · \"\(text)\""
+        }
         if value.hasPrefix("shell:") { return "运行脚本" }
         if value.hasPrefix("modifier:") {
             let spec = String(value.dropFirst(9))
@@ -179,6 +188,15 @@ enum KeyModifier: String, CaseIterable, Comparable, Hashable, Sendable {
         }
     }
 
+    var compactName: String {
+        switch self {
+        case .command: return "⌘ Cmd"
+        case .option: return "⌥ Opt"
+        case .control: return "⌃ Ctrl"
+        case .shift: return "⇧ Shift"
+        }
+    }
+
     var standardDslName: String {
         rawValue
     }
@@ -197,13 +215,31 @@ enum KeyModifier: String, CaseIterable, Comparable, Hashable, Sendable {
     }
 }
 
+enum TriggerStyle: String, CaseIterable, Identifiable, Sendable {
+    case tap = "tap"
+    case hold = "hold"
+    case `repeat` = "repeat"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .tap: return "单击 (tap)"
+        case .hold: return "长按 (hold)"
+        case .repeat: return "连发 (repeat)"
+        }
+    }
+}
+
 struct ShortcutKeyModel: Equatable, Hashable, Sendable {
     var modifiers: Set<KeyModifier>
     var key: String
+    var triggerStyle: TriggerStyle
 
-    init(modifiers: Set<KeyModifier> = [], key: String = "") {
+    init(modifiers: Set<KeyModifier> = [], key: String = "", triggerStyle: TriggerStyle = .tap) {
         self.modifiers = modifiers
         self.key = Self.normalizeKey(key)
+        self.triggerStyle = triggerStyle
     }
 
     static func normalizeKey(_ raw: String) -> String {
@@ -247,7 +283,14 @@ struct ShortcutKeyModel: Equatable, Hashable, Sendable {
             return "none"
         }
         if modifiers.isEmpty {
-            return "tap:\(cleanKey)"
+            switch triggerStyle {
+            case .tap:
+                return "tap:\(cleanKey)"
+            case .hold:
+                return "hold:\(cleanKey)"
+            case .repeat:
+                return "repeat:\(cleanKey)"
+            }
         }
         let sortedMods = modifiers.sorted().map(\.standardDslName)
         return "combo:\((sortedMods + [cleanKey]).joined(separator: "+"))"
@@ -260,11 +303,16 @@ struct ShortcutKeyModel: Equatable, Hashable, Sendable {
         }
         if trimmed.hasPrefix("tap:") {
             let key = String(trimmed.dropFirst(4))
-            return ShortcutKeyModel(modifiers: [], key: key)
+            return ShortcutKeyModel(modifiers: [], key: key, triggerStyle: .tap)
         }
         if trimmed.hasPrefix("hold:") {
             let key = String(trimmed.dropFirst(5))
-            return ShortcutKeyModel(modifiers: [], key: key)
+            return ShortcutKeyModel(modifiers: [], key: key, triggerStyle: .hold)
+        }
+        if trimmed.hasPrefix("repeat:") {
+            let payload = String(trimmed.dropFirst(7))
+            let key = payload.split(separator: "@").first.map(String.init) ?? payload
+            return ShortcutKeyModel(modifiers: [], key: key, triggerStyle: .repeat)
         }
         if trimmed.hasPrefix("combo:") {
             let payload = String(trimmed.dropFirst(6))
@@ -278,7 +326,7 @@ struct ShortcutKeyModel: Equatable, Hashable, Sendable {
                     mainKey = part
                 }
             }
-            return ShortcutKeyModel(modifiers: mods, key: mainKey)
+            return ShortcutKeyModel(modifiers: mods, key: mainKey, triggerStyle: .tap)
         }
         return nil
     }
