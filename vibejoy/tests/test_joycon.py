@@ -141,6 +141,25 @@ def test_runner_rediscovery_never_reopens_live_side(monkeypatch: pytest.MonkeyPa
     assert readers == [live, replacement]
 
 
+def test_drop_reader_releases_mapper_and_closes_reader() -> None:
+    class RecordingMapper:
+        def __init__(self) -> None:
+            self.released = False
+
+        def release_all(self) -> None:
+            self.released = True
+
+    reader = FakeReconnectReader()
+    mapper = RecordingMapper()
+    readers = [reader]
+    rumblers = {"right": reader.rumbler}
+    runner_mod._drop_reader(reader, readers, mapper, rumblers)  # type: ignore[arg-type]
+    assert readers == []
+    assert "right" not in rumblers
+    assert mapper.released
+    assert reader.closed
+
+
 class HeartbeatClock:
     def __init__(self) -> None:
         self.now = 0.0
@@ -156,7 +175,9 @@ class HeartbeatJoyCon(FakeJoyCon):
         self.fail = False
 
 
-def test_raw_report_heartbeat_detects_sleep_without_oserror(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_raw_report_heartbeat_detects_sleep_without_oserror(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
     monkeypatch.setattr(joycon_mod, "Rumbler", FakeRumbler)
     clock = HeartbeatClock()
     fake = HeartbeatJoyCon()
@@ -167,9 +188,11 @@ def test_raw_report_heartbeat_detects_sleep_without_oserror(monkeypatch: pytest.
     list(reader.poll())
     assert reader.is_connected
     clock.now = 2.1
-    list(reader.poll())
+    with caplog.at_level("INFO"):
+        list(reader.poll())
     assert not reader.is_connected
     assert fake._joycon_device.closed
+    assert any("raw report stalled for 2.1s (controller likely asleep)" in msg for msg in caplog.messages)
 
 
 def test_changing_or_missing_raw_report_never_false_disconnects(monkeypatch: pytest.MonkeyPatch) -> None:

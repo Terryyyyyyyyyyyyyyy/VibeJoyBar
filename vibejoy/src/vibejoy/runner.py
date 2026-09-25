@@ -177,7 +177,8 @@ def _main_loop(
 
         now = time.monotonic()
         if now >= rediscover_after:
-            rediscover_after = now + 2.0
+            rediscover_interval = 1.0 if len(readers) < 2 else 3.0
+            rediscover_after = now + rediscover_interval
             _rediscover_missing(readers, mapper, current_config, rumblers_by_side)
 
         elapsed = time.monotonic() - loop_start
@@ -198,6 +199,7 @@ def _drop_reader(
     rumblers_by_side.pop(reader.side, None)
     mapper.release_all()
     reader.close()
+    logger.info("vibejoy ▶ disconnected: %s; waiting for reconnect", reader.side)
     print(f"vibejoy ▶ disconnected: {reader.side}; waiting for reconnect", flush=True)
 
 

@@ -195,12 +195,12 @@ class JoyConReader:
         Assumes the user is not touching the stick. Silently accepts any
         offset — Joy-Con factory calibration varies by unit.
         """
-        # Wait up to 0.5s for the pyjoycon background thread to receive its first valid packet
-        for _ in range(25):
+        # Wait up to 1.0s for the pyjoycon background thread to receive its first valid packet
+        for _ in range(40):
             raw = getattr(self._joycon, "_input_report", None)
             if raw and any(raw):
                 break
-            time.sleep(0.02)
+            time.sleep(0.025)
 
         sum_x = 0
         sum_y = 0
@@ -374,7 +374,8 @@ class JoyConReader:
             self._last_report_change_at = now
             return True
         if self._last_report_change_at is not None and now - self._last_report_change_at > self._heartbeat_timeout_s:
-            logger.warning("%s joycon raw report stalled for %.1fs", self._side, now - self._last_report_change_at)
+            stall_duration = now - self._last_report_change_at
+            logger.info("%s joycon raw report stalled for %.1fs (controller likely asleep)", self._side, stall_duration)
             self._mark_disconnected()
             return False
         return True

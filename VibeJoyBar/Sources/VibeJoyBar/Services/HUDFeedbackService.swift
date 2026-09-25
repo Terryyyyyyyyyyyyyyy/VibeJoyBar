@@ -35,10 +35,18 @@ final class HUDFeedbackService {
 
     @Observable
     final class HUDModel {
+        enum Mode {
+            case profileSwitch
+            case controllerWake
+        }
+
+        var mode: Mode = .profileSwitch
         var profileName: String = "default"
         var appName: String? = nil
         var appIcon: NSImage? = nil
         var isAutoSwitch: Bool = false
+        var wakeTitle: String = ""
+        var wakeSubtitle: String = ""
         var isVisible: Bool = false
     }
 
@@ -59,11 +67,60 @@ final class HUDFeedbackService {
             }
         }
 
+        hudModel.mode = .profileSwitch
         hudModel.profileName = profileName
         hudModel.appName = appName
         hudModel.appIcon = icon
         hudModel.isAutoSwitch = isAutoSwitch
 
+        presentHUD(durationMs: 1500)
+    }
+
+    func showControllerWake(sides: Set<String>, batteries: [ActiveControllerSide: ControllerBattery]) {
+        dismissTask?.cancel()
+        dismissTask = nil
+
+        let title: String
+        let subtitle: String
+
+        if sides.count > 1 {
+            title = "双持手柄已唤醒"
+            if let left = batteries[.left]?.percentage, let right = batteries[.right]?.percentage, left > 0 || right > 0 {
+                subtitle = "左 \(left)% · 右 \(right)% · 随时可用"
+            } else if let anyBat = batteries.values.first, anyBat.percentage > 0 {
+                subtitle = "电量 \(anyBat.percentage)% · 随时可用"
+            } else {
+                subtitle = "连接就绪 · 随时可用"
+            }
+        } else if sides.contains("right") {
+            title = "右手柄已唤醒"
+            if let bat = batteries[.right], bat.percentage > 0 {
+                subtitle = "电量 \(bat.percentage)% · 随时可用"
+            } else if let anyBat = batteries.values.first, anyBat.percentage > 0 {
+                subtitle = "电量 \(anyBat.percentage)% · 随时可用"
+            } else {
+                subtitle = "连接就绪 · 随时可用"
+            }
+        } else {
+            title = "左手柄已唤醒"
+            if let bat = batteries[.left], bat.percentage > 0 {
+                subtitle = "电量 \(bat.percentage)% · 随时可用"
+            } else if let anyBat = batteries.values.first, anyBat.percentage > 0 {
+                subtitle = "电量 \(anyBat.percentage)% · 随时可用"
+            } else {
+                subtitle = "连接就绪 · 随时可用"
+            }
+        }
+
+        hudModel.mode = .controllerWake
+        hudModel.wakeTitle = title
+        hudModel.wakeSubtitle = subtitle
+        hudModel.appIcon = nil
+
+        presentHUD(durationMs: 2000)
+    }
+
+    private func presentHUD(durationMs: Int) {
         ensurePanelCreated()
 
         guard let panel = panel else { return }
@@ -85,7 +142,7 @@ final class HUDFeedbackService {
         }
 
         dismissTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(1500))
+            try? await Task.sleep(for: .milliseconds(durationMs))
             guard !Task.isCancelled, let self = self else { return }
 
             withAnimation(.easeOut(duration: 0.35)) {
@@ -114,12 +171,7 @@ private struct HUDContainerView: View {
     var body: some View {
         ZStack {
             if model.isVisible {
-                HUDCapsuleView(
-                    profileName: model.profileName,
-                    appName: model.appName,
-                    appIcon: model.appIcon,
-                    isAutoSwitch: model.isAutoSwitch
-                )
+                HUDCapsuleView(model: model)
                 .transition(
                     .asymmetric(
                         insertion: .scale(scale: 0.88).combined(with: .opacity).combined(with: .offset(y: -16)),
@@ -133,19 +185,20 @@ private struct HUDContainerView: View {
 }
 
 private struct HUDCapsuleView: View {
-    let profileName: String
-    let appName: String?
-    let appIcon: NSImage?
-    let isAutoSwitch: Bool
+    @Bindable var model: HUDFeedbackService.HUDModel
 
     var body: some View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(Color.primary.opacity(0.08))
+                    .fill(model.mode == .controllerWake ? Color.green.opacity(0.12) : Color.primary.opacity(0.08))
                     .frame(width: 32, height: 32)
 
-                if let icon = appIcon {
+                if model.mode == .controllerWake {
+                    Image(systemName: "gamecontroller.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.green)
+                } else if let icon = model.appIcon {
                     Image(nsImage: icon)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -154,38 +207,56 @@ private struct HUDCapsuleView: View {
                 } else {
                     Image(systemName: "gamecontroller.fill")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(isAutoSwitch ? Color.accentColor : Color.primary)
+                        .foregroundStyle(model.isAutoSwitch ? Color.accentColor : Color.primary)
                 }
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
-                    Text(isAutoSwitch ? "已自动路由" : "已切换方案")
+                if model.mode == .controllerWake {
+                    Text(model.wakeTitle)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    Text(model.wakeSubtitle)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
-                    if let appName = appName, !appName.isEmpty {
-                        Text("· \(appName)")
+                        .lineLimit(1)
+                } else {
+                    HStack(spacing: 4) {
+                        Text(model.isAutoSwitch ? "已自动路由" : "已切换方案")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        if let appName = model.appName, !appName.isEmpty {
+                            Text("· \(appName)")
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
-                }
 
-                Text(profileName)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+                    Text(model.profileName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                }
             }
 
             Spacer(minLength: 0)
 
-            Image(systemName: isAutoSwitch ? "bolt.horizontal.fill" : "checkmark.circle.fill")
-                .font(.system(size: 14))
-                .foregroundStyle(isAutoSwitch ? Color.orange : Color.green)
+            if model.mode == .controllerWake {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color.green)
+            } else {
+                Image(systemName: model.isAutoSwitch ? "bolt.horizontal.fill" : "checkmark.circle.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(model.isAutoSwitch ? Color.orange : Color.green)
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .frame(width: 280, height: 48)
+        .frame(minWidth: 280, maxWidth: 300, minHeight: 48, maxHeight: 48)
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(
             Capsule()

@@ -891,4 +891,61 @@ final class VibeJoyConfigStoreTests: XCTestCase {
         XCTAssertEqual(model.configStore.action(for: .button("a")), "combo:cmd+t")
         XCTAssertTrue(model.activityMessage.contains("已保留未保存的映射编辑"))
     }
+
+    func testAppVersionAndBuildDefaultValues() {
+        XCTAssertEqual(AppPaths.appVersion, "0.9.9")
+        XCTAssertEqual(AppPaths.appBuild, "10")
+        XCTAssertEqual(AppPaths.versionString, "v0.9.9")
+    }
+
+    @MainActor
+    func testProcessServicePhaseTransitions() {
+        let service = VibeJoyProcessService(
+            projectURL: URL(fileURLWithPath: "/tmp"),
+            uvURL: URL(fileURLWithPath: "/tmp/uv")
+        )
+
+        // Initial state
+        XCTAssertEqual(service.phase, .stopped)
+
+        // Connect right controller
+        service.consume("vibejoy ▶ connected: right")
+        XCTAssertEqual(service.connectedSides, ["right"])
+        XCTAssertEqual(service.phase, .running("右手柄"))
+
+        // Connect left controller (dual mode)
+        service.consume("vibejoy ▶ connected: left")
+        XCTAssertEqual(service.connectedSides, ["left", "right"])
+        XCTAssertEqual(service.phase, .running("双持"))
+
+        // Disconnect right controller
+        service.consume("vibejoy ▶ disconnected: right; waiting for reconnect")
+        XCTAssertEqual(service.connectedSides, ["left"])
+        XCTAssertEqual(service.phase, .running("左手柄"))
+
+        // Disconnect left controller -> should transition to waitingForController
+        service.consume("vibejoy ▶ disconnected: left; waiting for reconnect")
+        XCTAssertEqual(service.connectedSides, [])
+        XCTAssertEqual(service.phase, .waitingForController)
+
+        // Empty sides with nil line also updates to waitingForController
+        service.updatePhaseFromConnectedSides()
+        XCTAssertEqual(service.phase, .waitingForController)
+    }
+
+    @MainActor
+    func testHUDControllerWakePresentation() {
+        HUDFeedbackService.shared.showControllerWake(
+            sides: ["right"],
+            batteries: [.right: ControllerBattery(level: 4, percentage: 100, isCharging: false)]
+        )
+        // Verify dual wake as well
+        HUDFeedbackService.shared.showControllerWake(
+            sides: ["left", "right"],
+            batteries: [
+                .left: ControllerBattery(level: 3, percentage: 75, isCharging: false),
+                .right: ControllerBattery(level: 4, percentage: 100, isCharging: false)
+            ]
+        )
+    }
 }

@@ -153,15 +153,21 @@ final class VibeJoyProcessService {
         else { process = nil; cleanupPipes(); phase = .stopped }
     }
 
-    private func consume(_ text: String) {
+    func consume(_ text: String) {
         for line in text.components(separatedBy: .newlines) where !line.isEmpty {
             appendLog(line)
             if line.contains("connected:") {
-                if line.contains("right") {
-                    connectedSides.insert("right")
-                }
-                if line.contains("left") {
-                    connectedSides.insert("left")
+                if !line.contains("(reconnected)") {
+                    if line.contains("right") {
+                        connectedSides.insert("right")
+                    }
+                    if line.contains("left") {
+                        connectedSides.insert("left")
+                    }
+                } else {
+                    Task { [weak self] in
+                        await self?.pollStatusOnce()
+                    }
                 }
             }
             if line.contains("disconnected:") {
@@ -179,7 +185,7 @@ final class VibeJoyProcessService {
         }
     }
 
-    private func updatePhaseFromConnectedSides(line: String? = nil) {
+    func updatePhaseFromConnectedSides(line: String? = nil) {
         let sides = connectedSides
         if !sides.isEmpty {
             if sides.count > 1 {
@@ -189,7 +195,7 @@ final class VibeJoyProcessService {
             } else {
                 phase = .running("左手柄")
             }
-        } else if let line = line, (line.contains("disconnected:") || line.contains("waiting:") || line.contains("no Joy-Con") || line.contains("none detected")) {
+        } else {
             phase = .waitingForController
         }
     }
@@ -218,15 +224,8 @@ final class VibeJoyProcessService {
         guard result.exitCode == 0 else { return }
         if let data = result.output.data(using: .utf8),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            if let sidesList = json["sides"] as? [String] {
-                let newSides = Set(sidesList)
-                if newSides != self.connectedSides {
-                    self.connectedSides = newSides
-                    self.updatePhaseFromConnectedSides()
-                }
-            }
+            var updatedBatteries: [ActiveControllerSide: ControllerBattery] = [:]
             if let controllers = json["controllers"] as? [String: [String: Any]] {
-                var updatedBatteries: [ActiveControllerSide: ControllerBattery] = [:]
                 for (sideKey, info) in controllers {
                     guard let side = ActiveControllerSide(rawValue: sideKey) else { continue }
                     let level = (info["level"] as? Int) ?? ((info["battery"] as? [String: Any])?["level"] as? Int) ?? 0
@@ -235,6 +234,21 @@ final class VibeJoyProcessService {
                     updatedBatteries[side] = ControllerBattery(level: level, percentage: percentage, isCharging: charging)
                 }
                 self.batteries = updatedBatteries
+            }
+
+            if let sidesList = json["sides"] as? [String] {
+                let newSides = Set(sidesList)
+                let previousSides = self.connectedSides
+                if newSides != previousSides {
+                    if previousSides.isEmpty && !newSides.isEmpty {
+                        let hudFeedbackEnabled = UserDefaults.standard.object(forKey: AppPaths.hudFeedbackKey) as? Bool ?? true
+                        if hudFeedbackEnabled {
+                            HUDFeedbackService.shared.showControllerWake(sides: newSides, batteries: updatedBatteries)
+                        }
+                    }
+                    self.connectedSides = newSides
+                    self.updatePhaseFromConnectedSides()
+                }
             }
         }
     }
