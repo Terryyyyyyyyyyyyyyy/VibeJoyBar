@@ -31,4 +31,16 @@ enum AppPaths {
         }
         return URL(fileURLWithPath: path)
     }
+
+    static var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.9.8"
+    }
+
+    static var appBuild: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "9"
+    }
+
+    static var versionString: String {
+        "v\(appVersion)"
+    }
 }

@@ -103,6 +103,13 @@ struct DashboardHeader: View {
                 HStack(spacing: 8) {
                     Text(model.activeControllerSide.displayName + " 控制器")
                         .font(.title3.weight(.semibold))
+                    Text(AppPaths.versionString)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2.5)
+                        .background(Color.accentColor.opacity(0.12), in: Capsule())
+                        .overlay(Capsule().stroke(Color.accentColor.opacity(0.25), lineWidth: 1))
                     if let battery = model.activeBattery {
                         BatteryBadgeView(battery: battery)
                     }
@@ -290,6 +297,9 @@ struct DashboardFooter: View {
                 .foregroundStyle(model.configStore.hasUnsavedChanges ? .orange : .green)
             Text(message).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             Spacer()
+            Text("VibeJoy Bar \(AppPaths.versionString) (Build \(AppPaths.appBuild))")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.tertiary)
             Button("仅校验") { model.validateCurrentConfig() }.disabled(model.isBusy)
             Button("保存并重启") { model.saveMappings() }
                 .buttonStyle(.borderedProminent)
