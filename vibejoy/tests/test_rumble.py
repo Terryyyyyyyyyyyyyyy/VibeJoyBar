@@ -80,3 +80,60 @@ class TestRumblePulseValidation:
         left, right = p.to_sides()
         assert left == b"\x01\x02\x03\x04"
         assert right == b"\x05\x06\x07\x08"
+
+
+class TestAgentPresetsAndCLI:
+    @pytest.mark.parametrize(
+        "name",
+        ["task_done", "task_fail", "user_attention", "voice_pulse"],
+    )
+    def test_agent_preset_resolution(self, name: str) -> None:
+        assert name in PRESETS
+        pulses = resolve_pattern(name)
+        assert len(pulses) >= 1
+        for pulse in pulses:
+            assert isinstance(pulse, RumblePulse)
+            assert len(pulse.data) in (4, 8)
+            assert pulse.duration_ms > 0
+
+    def test_cli_positional_and_hud_parsing(self) -> None:
+        from vibejoy.cli import _build_parser
+
+        parser = _build_parser()
+        args = parser.parse_args(["rumble", "task_done"])
+        assert args.pos_pattern == "task_done"
+        assert args.hud is False
+
+        args_hud = parser.parse_args(["rumble", "task_fail", "--hud"])
+        assert args_hud.pos_pattern == "task_fail"
+        assert args_hud.hud is True
+
+        args_legacy = parser.parse_args(["rumble", "-p", "user_attention"])
+        assert args_legacy.pos_pattern is None
+        assert args_legacy.pattern == "user_attention"
+        assert args_legacy.hud is False
+
+    def test_cmd_rumble_with_pos_pattern(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from vibejoy.cli import _build_parser, cmd_rumble
+
+        played_pulses: list[object] = []
+
+        class DummyRumbler:
+            def __enter__(self) -> DummyRumbler:
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                pass
+
+            def play(self, pulses: object) -> None:
+                played_pulses.append(pulses)
+
+        monkeypatch.setattr("vibejoy.cli.default_socket_path", lambda: pytest.MonkeyPatch())
+        monkeypatch.setattr("vibejoy.rumble.Rumbler.from_side", lambda _side: DummyRumbler())
+
+        parser = _build_parser()
+        args = parser.parse_args(["rumble", "task_done", "--direct"])
+        code = cmd_rumble(args)
+        assert code == 0
+        assert len(played_pulses) == 1
+        assert played_pulses[0] == PRESETS["task_done"]

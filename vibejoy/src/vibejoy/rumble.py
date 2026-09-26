@@ -93,6 +93,24 @@ PRESETS: dict[str, tuple[RumblePulse, ...]] = {
         RumblePulse(NEUTRAL_SIDE, 70),
         RumblePulse(_LOW_BUZZ, 220),
     ),
+    "task_done": (
+        RumblePulse(_STRONG_CLICK, 60),
+        RumblePulse(NEUTRAL_SIDE, 30),
+        RumblePulse(_HIGH_DING, 90),
+    ),
+    "task_fail": (
+        RumblePulse(_LOW_BUZZ, 160),
+        RumblePulse(NEUTRAL_SIDE, 70),
+        RumblePulse(_LOW_BUZZ, 240),
+    ),
+    "user_attention": (
+        RumblePulse(_MEDIUM_BUZZ, 80),
+        RumblePulse(NEUTRAL_SIDE, 120),
+        RumblePulse(_MEDIUM_BUZZ, 80),
+    ),
+    "voice_pulse": (
+        RumblePulse(_HIGH_DING, 35),
+    ),
 }
 """Named rumble patterns. Each is a tuple of pulses played back-to-back."""
 

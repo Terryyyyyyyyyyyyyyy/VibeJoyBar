@@ -56,6 +56,65 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Section("📳 具身触感与 Agent 协同") {
+                Text("利用 Joy-Con 线性马达（HD Rumble）作为 AI Agent 执行进度的物理触感指示器。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    Button {
+                        Task {
+                            _ = await model.processService.runOneShot(arguments: ["rumble", "task_done"])
+                        }
+                        HUDFeedbackService.shared.showAgentEvent(kind: .taskDone)
+                    } label: {
+                        Label("测试：任务完成 (task_done)", systemImage: "sparkles")
+                    }
+
+                    Button {
+                        Task {
+                            _ = await model.processService.runOneShot(arguments: ["rumble", "task_fail"])
+                        }
+                        HUDFeedbackService.shared.showAgentEvent(kind: .taskFail)
+                    } label: {
+                        Label("测试：任务报错 (task_fail)", systemImage: "exclamationmark.triangle.fill")
+                    }
+
+                    Button {
+                        Task {
+                            _ = await model.processService.runOneShot(arguments: ["rumble", "user_attention"])
+                        }
+                        HUDFeedbackService.shared.showAgentEvent(kind: .userAttention)
+                    } label: {
+                        Label("测试：人工确认 (user_attention)", systemImage: "person.wave.2.fill")
+                    }
+                }
+                .controlSize(.regular)
+
+                DisclosureGroup("命令行别名与 Claude Code Hook 配置") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(shellAliasesText)
+                            .font(.system(.caption, design: .monospaced))
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(nsColor: .textBackgroundColor).opacity(0.6))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                        HStack {
+                            Button("复制 Shell 别名") {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(shellAliasesText, forType: .string)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+
+                            Spacer()
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+            }
+
             Section("说明") {
                 Text("菜单栏 App 会在后台管理 VibeJoy，不需要保留终端窗口。手柄未连接时会每 8 秒自动重试。")
                     .font(.caption)
@@ -74,7 +133,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 560, height: 550)
+        .frame(width: 580, height: 680)
         .padding()
         .onAppear {
             NSApp.activate(ignoringOtherApps: true)
@@ -88,6 +147,13 @@ struct SettingsView: View {
             }
         }
     }
+
+    private let shellAliasesText = """
+# 快速别名配置（可在 ~/.zshrc 中添加）：
+alias agy-done="vibejoy rumble task_done"
+alias agy-fail="vibejoy rumble task_fail"
+alias agy-ask="vibejoy rumble user_attention"
+"""
 
     private var appVersion: String {
         AppPaths.appVersion

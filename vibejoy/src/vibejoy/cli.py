@@ -114,6 +114,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     p_rumble = sub.add_parser("rumble", help="trigger rumble")
     p_rumble.add_argument(
+        "pos_pattern",
+        nargs="?",
+        default=None,
+        help="preset name or bytes spec (e.g. task_done, task_fail, user_attention, double)",
+    )
+    p_rumble.add_argument(
         "--pattern",
         "-p",
         default="short",
@@ -130,6 +136,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--direct",
         action="store_true",
         help="skip the daemon and open HID directly",
+    )
+    p_rumble.add_argument(
+        "--hud",
+        action="store_true",
+        help="trigger desktop HUD feedback notification",
     )
 
     sub.add_parser("schema", help="print the starter config example")
@@ -366,13 +377,32 @@ def cmd_permission(args: argparse.Namespace) -> int:
     return 4
 
 
+def _trigger_hud_event(pattern_name: str) -> None:
+    try:
+        from Foundation import NSDistributedNotificationCenter
+
+        center = NSDistributedNotificationCenter.defaultCenter()
+        center.postNotificationName_object_userInfo_deliverImmediately_(
+            "com.vibejoy.hud_agent_event",
+            None,
+            {"kind": pattern_name},
+            True,
+        )
+    except Exception as e:
+        logger.debug("Failed to post HUD notification: %s", e)
+
+
 def cmd_rumble(args: argparse.Namespace) -> int:
+    pattern_name = args.pos_pattern or args.pattern
     # Parse pattern eagerly so we surface bad input regardless of delivery path.
     try:
-        resolve_pattern(args.pattern)
+        resolve_pattern(pattern_name)
     except ValueError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
+
+    if getattr(args, "hud", False):
+        _trigger_hud_event(pattern_name)
 
     # Prefer IPC when the daemon is up — otherwise open HID directly.
     socket_path = default_socket_path()
@@ -381,7 +411,7 @@ def cmd_rumble(args: argparse.Namespace) -> int:
             reply = ipc_call(
                 {
                     "cmd": "rumble",
-                    "pattern": args.pattern,
+                    "pattern": pattern_name,
                     "side": args.side,
                 }
             )
@@ -390,7 +420,7 @@ def cmd_rumble(args: argparse.Namespace) -> int:
         except IPCError as e:
             print(f"daemon unreachable ({e}); falling back to direct HID", file=sys.stderr)
 
-    pulses = resolve_pattern(args.pattern)
+    pulses = resolve_pattern(pattern_name)
     side_req = "right" if args.side in ("any", "right", "r") else "left"
     try:
         with Rumbler.from_side(side_req) as rumbler:

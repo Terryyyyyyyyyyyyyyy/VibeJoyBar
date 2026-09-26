@@ -893,9 +893,9 @@ final class VibeJoyConfigStoreTests: XCTestCase {
     }
 
     func testAppVersionAndBuildDefaultValues() {
-        XCTAssertEqual(AppPaths.appVersion, "0.9.9")
-        XCTAssertEqual(AppPaths.appBuild, "10")
-        XCTAssertEqual(AppPaths.versionString, "v0.9.9")
+        XCTAssertEqual(AppPaths.appVersion, "1.0.0")
+        XCTAssertEqual(AppPaths.appBuild, "11")
+        XCTAssertEqual(AppPaths.versionString, "v1.0.0")
     }
 
     @MainActor
@@ -947,5 +947,15 @@ final class VibeJoyConfigStoreTests: XCTestCase {
                 .right: ControllerBattery(level: 4, percentage: 100, isCharging: false)
             ]
         )
+    }
+
+    @MainActor
+    func testHUDAgentEventPresentation() {
+        HUDFeedbackService.shared.showAgentEvent(kind: .taskDone)
+        HUDFeedbackService.shared.showAgentEvent(kind: .taskFail, message: "构建失败")
+        HUDFeedbackService.shared.showAgentEvent(kind: .userAttention, message: "是否确认部署？")
+        XCTAssertEqual(AgentEventKind.taskDone.rawValue, "task_done")
+        XCTAssertEqual(AgentEventKind.taskFail.rawValue, "task_fail")
+        XCTAssertEqual(AgentEventKind.userAttention.rawValue, "user_attention")
     }
 }
