@@ -130,6 +130,13 @@ def _post_macos_key_event(keycode: int, pressed: bool, flags: int) -> bool:
     return True
 
 
+_CHAR_ALIASES: dict[str, str] = {
+    "grave": "`",
+    "backtick": "`",
+    "tilde": "~",
+}
+
+
 def resolve_key(name: str) -> _ResolvedKey:
     """Convert a human key name into something ``pynput.Controller`` accepts."""
     if not isinstance(name, str):
@@ -139,6 +146,8 @@ def resolve_key(name: str) -> _ResolvedKey:
         raise UnknownKeyError("empty key name")
     if k in _SYMBOLS:
         return _SYMBOLS[k]
+    if k in _CHAR_ALIASES:
+        return _CHAR_ALIASES[k]
     if len(k) == 1:
         # Single character: letter / digit / punctuation.
         return k

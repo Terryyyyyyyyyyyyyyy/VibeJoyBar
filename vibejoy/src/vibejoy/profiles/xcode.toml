@@ -1,0 +1,54 @@
+# VibeJoy — Xcode Profile
+# macOS / iOS 原生开发方案
+
+[meta]
+description = "Xcode 专属方案"
+apps = ["com.apple.dt.Xcode"]
+
+[global]
+deadzone       = 0.2
+poll_hz        = 100
+long_press_ms  = 250
+stick_mode     = "4dir"
+
+# ─────────── Right Joy-Con ───────────
+
+[profile.right.buttons]
+a       = "tap:enter"                       # 确定
+b       = "tap:escape"                      # 取消
+x       = "combo:option+0"                  # Type4Me 麦克风 1
+y       = "combo:option+1"                  # Type4Me 麦克风 2
+r       = "combo:option+2"                  # Type4Me Prompt 优化
+zr      = "app_switcher:system"             # 系统应用轮播切换
+plus    = "combo:cmd+r"                     # 编译并运行
+home    = "combo:cmd+shift+o"               # 快速打开文件 (Open Quickly)
+sl      = "combo:cmd+u"                     # 运行测试用例 (Test)
+sr      = "combo:cmd+."                     # 停止运行 (Stop)
+"r-stick" = "combo:cmd+ctrl+j"              # 跳转至定义 (Jump to Definition)
+
+[profile.right.stick]
+up      = "combo:cmd+'"                     # 跳转到下一个问题/警告 (Next Issue)
+down    = "combo:cmd+\""                    # 跳转到上一个问题/警告 (Previous Issue)
+left    = "combo:cmd+ctrl+left"             # 后退浏览历史
+right   = "combo:cmd+ctrl+right"            # 前进浏览历史
+
+# ─────────── Left Joy-Con ───────────
+
+[profile.left.buttons]
+right   = "tap:enter"                       # 对应 A
+down    = "tap:escape"                      # 对应 B
+up      = "combo:option+0"                  # 对应 X
+left    = "combo:option+1"                  # 对应 Y
+l       = "combo:option+2"                  # 对应 R
+zl      = "app_switcher:system"             # 对应 ZR
+minus   = "combo:cmd+r"                     # 编译并运行
+capture = "combo:cmd+shift+o"               # 快速打开文件
+sl      = "combo:cmd+u"                     # 运行测试用例
+sr      = "combo:cmd+."                     # 停止运行
+"l-stick" = "combo:cmd+ctrl+j"              # 跳转至定义
+
+[profile.left.stick]
+up      = "combo:cmd+'"                     # 跳转到下一个问题/警告
+down    = "combo:cmd+\""                    # 跳转到上一个问题/警告
+left    = "combo:cmd+ctrl+left"             # 后退浏览历史
+right   = "combo:cmd+ctrl+right"            # 前进浏览历史

@@ -225,6 +225,26 @@ final class AppModel {
         }
     }
 
+    func importTemplate(_ template: ProfileTemplate) {
+        guard !isBusy else { return }
+        isBusy = true
+        activityMessage = "正在导入并启用方案 '\(template.title)'…"
+        Task {
+            do {
+                try configStore.importTemplate(template)
+                if processService.desiredRunning {
+                    let reloaded = await processService.reload()
+                    activityMessage = reloaded ? "已导入并切换至方案 \(template.id)（零中断生效）" : "已导入并切换到方案 '\(template.id)'"
+                } else {
+                    activityMessage = "已导入并切换到方案 '\(template.id)'"
+                }
+            } catch {
+                activityMessage = "导入方案失败：\(error.localizedDescription)"
+            }
+            isBusy = false
+        }
+    }
+
     func updateTargetApps(for profileName: String, apps: [String]) {
         do {
             try configStore.updateTargetApps(for: profileName, apps: apps)

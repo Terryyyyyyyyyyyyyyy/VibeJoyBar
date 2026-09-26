@@ -1,0 +1,62 @@
+# VibeJoy — VS Code & Cursor Profile
+# 主流代码编辑器高效开发方案
+
+[meta]
+description = "VS Code & Cursor 专属方案"
+apps = ["com.microsoft.VSCode", "com.microsoft.VSCodeInsiders", "com.todesktop.230313mzl4w4u92", "com.cursor.Cursor"]
+
+[global]
+deadzone       = 0.2
+poll_hz        = 100
+long_press_ms  = 250
+stick_mode     = "4dir"
+
+# ─────────── Right Joy-Con ───────────
+
+[profile.right.buttons]
+a       = "tap:enter"                       # 确定
+b       = "tap:escape"                      # 取消 / 退出
+x       = "combo:option+0"                  # Type4Me 麦克风 1
+y       = "combo:option+1"                  # Type4Me 麦克风 2
+r       = "combo:option+2"                  # Type4Me Prompt 优化
+zr      = "app_switcher:system"             # 系统应用轮播切换
+plus    = "combo:cmd+s"                     # 保存文件
+home    = "combo:cmd+shift+p"               # 命令面板
+sl      = "combo:ctrl+grave"                # 切换集成终端
+sr      = "tap:f12"                         # 转到定义
+"r-stick" = "combo:cmd+."                   # 快速修复 / 建议
+
+[profile.right.stick]
+up      = "macro:codex_page_up"             # 向上滚动
+down    = "macro:codex_page_down"           # 向下滚动
+left    = "combo:cmd+alt+left"              # 切换至左侧标签页
+right   = "combo:cmd+alt+right"             # 切换至右侧标签页
+
+# ─────────── Left Joy-Con ───────────
+
+[profile.left.buttons]
+right   = "tap:enter"                       # 对应 A
+down    = "tap:escape"                      # 对应 B
+up      = "combo:option+0"                  # 对应 X
+left    = "combo:option+1"                  # 对应 Y
+l       = "combo:option+2"                  # 对应 R
+zl      = "app_switcher:system"             # 对应 ZR
+minus   = "combo:cmd+s"                     # 对应 +
+capture = "combo:cmd+shift+p"               # 对应 Home
+sl      = "combo:ctrl+grave"                # 切换集成终端
+sr      = "tap:f12"                         # 转到定义
+"l-stick" = "combo:cmd+."                   # 快速修复 / 建议
+
+[profile.left.stick]
+up      = "macro:codex_page_up"             # 向上滚动
+down    = "macro:codex_page_down"           # 向下滚动
+left    = "combo:cmd+alt+left"              # 切换至左侧标签页
+right   = "combo:cmd+alt+right"             # 切换至右侧标签页
+
+# ─────────── Macros ───────────
+
+[macro.codex_page_up]
+steps   = ["scroll:up@8"]
+
+[macro.codex_page_down]
+steps   = ["scroll:down@8"]

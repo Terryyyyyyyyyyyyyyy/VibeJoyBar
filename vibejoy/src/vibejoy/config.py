@@ -314,6 +314,43 @@ def read_default_left_profile() -> str:
         )
 
 
+def list_templates() -> list[str]:
+    """Return the names of official bundled developer profile templates."""
+    names: set[str] = set()
+    here = Path(__file__).resolve().parent / DEFAULT_PROFILES_DIR_NAME
+    if here.is_dir():
+        for p in here.glob("*.toml"):
+            if p.stem not in ("default", "left_default"):
+                names.add(p.stem)
+    try:
+        res_dir = resources.files("vibejoy").joinpath("profiles")
+        for item in res_dir.iterdir():
+            if item.name.endswith(".toml"):
+                stem = item.name[:-5]
+                if stem not in ("default", "left_default"):
+                    names.add(stem)
+    except Exception:
+        pass
+    if not names:
+        names = {"vscode", "xcode", "terminal", "antigravity", "browser"}
+    order = ["vscode", "xcode", "terminal", "antigravity", "browser"]
+    return sorted(names, key=lambda n: (order.index(n) if n in order else 99, n))
+
+
+def read_template(name: str) -> str:
+    """Return the content of a bundled developer profile template as text."""
+    clean_name = validate_profile_name(name)
+    resource_path = f"profiles/{clean_name}.toml"
+    try:
+        return resources.files("vibejoy").joinpath(resource_path).read_text("utf-8")
+    except (FileNotFoundError, ModuleNotFoundError, TypeError) as e:
+        here = Path(__file__).resolve().parent
+        template_file = here / DEFAULT_PROFILES_DIR_NAME / f"{clean_name}.toml"
+        if template_file.is_file():
+            return template_file.read_text("utf-8")
+        raise ConfigError(f"template '{name}' not found") from e
+
+
 def ensure_profiles_initialized() -> Path:
     """Ensure the user profiles directory and default profiles exist.
 

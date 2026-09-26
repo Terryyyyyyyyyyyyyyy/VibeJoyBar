@@ -90,6 +90,7 @@ struct DashboardHeader: View {
     @State private var showingResetConfirmation = false
     @State private var showingSaveAsSheet = false
     @State private var showingAppAssociationSheet = false
+    @State private var showingTemplateSheet = false
     @State private var newProfileName = ""
     @State private var showingDeleteConfirmation = false
 
@@ -148,6 +149,11 @@ struct DashboardHeader: View {
                     }
                 }
                 Divider()
+                Button {
+                    showingTemplateSheet = true
+                } label: {
+                    Label("从开发者方案库导入…", systemImage: "square.grid.2x2")
+                }
                 Button {
                     showingAppAssociationSheet = true
                 } label: {
@@ -270,6 +276,9 @@ struct DashboardHeader: View {
             }
             .sheet(isPresented: $showingAppAssociationSheet) {
                 AppAssociationSheet(model: model)
+            }
+            .sheet(isPresented: $showingTemplateSheet) {
+                ProfileTemplateSheet(model: model)
             }
         }
         .padding(.horizontal, 22)

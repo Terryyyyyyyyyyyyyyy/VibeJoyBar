@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import io
 from pathlib import Path
 from unittest.mock import patch
 
@@ -19,8 +18,10 @@ from vibejoy.config import (
     ensure_profiles_initialized,
     get_active_profile,
     list_profiles,
+    list_templates,
     load_config,
     read_default_profile,
+    read_template,
     set_active_profile,
     switch_profile,
     validate_config,
@@ -340,4 +341,58 @@ def test_list_profiles_includes_apps(tmp_path: Path, monkeypatch: pytest.MonkeyP
     out = capsys.readouterr().out
     assert "[apps: com.apple.dt.Xcode, Visual Studio Code]" in out
     assert "[apps: -]" in out
+
+
+def test_bundled_templates_load_and_validate(tmp_path: Path):
+    templates = list_templates()
+    expected = ["vscode", "xcode", "terminal", "antigravity", "browser"]
+    assert set(expected).issubset(set(templates))
+
+    for name in expected:
+        content = read_template(name)
+        assert len(content) > 0
+        test_file = tmp_path / f"{name}.toml"
+        test_file.write_text(content, encoding="utf-8")
+        cfg = load_config(test_file)
+        errors = validate_config(cfg)
+        assert errors == [], f"Template {name} has validation errors: {errors}"
+        assert len(cfg.meta.apps) > 0, f"Template {name} should specify target apps"
+
+
+def test_bundled_templates_preserve_global_locks(tmp_path: Path):
+    for name in ["vscode", "xcode", "terminal", "antigravity", "browser"]:
+        content = read_template(name)
+        test_file = tmp_path / f"{name}_locks.toml"
+        test_file.write_text(content, encoding="utf-8")
+        cfg = load_config(test_file)
+
+        # Right Joy-Con global locks
+        rb = cfg.profiles["right"].buttons
+        assert rb["a"] == "tap:enter"
+        assert rb["b"] == "tap:escape"
+        assert rb["x"] == "combo:option+0"
+        assert rb["y"] == "combo:option+1"
+        assert rb["r"] == "combo:option+2"
+        assert rb["zr"] == "app_switcher:system"
+
+        # Left Joy-Con global locks
+        lb = cfg.profiles["left"].buttons
+        assert lb["right"] == "tap:enter"
+        assert lb["down"] == "tap:escape"
+        assert lb["up"] == "combo:option+0"
+        assert lb["left"] == "combo:option+1"
+        assert lb["l"] == "combo:option+2"
+        assert lb["zl"] == "app_switcher:system"
+
+
+def test_cli_profile_templates(capsys: pytest.CaptureFixture[str]):
+    rc = main(["profile", "templates"])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Built-in Developer Templates:" in out
+    assert "vscode" in out
+    assert "xcode" in out
+    assert "terminal" in out
+    assert "antigravity" in out
+    assert "browser" in out
 

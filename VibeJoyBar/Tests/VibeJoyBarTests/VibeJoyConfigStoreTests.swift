@@ -893,9 +893,9 @@ final class VibeJoyConfigStoreTests: XCTestCase {
     }
 
     func testAppVersionAndBuildDefaultValues() {
-        XCTAssertEqual(AppPaths.appVersion, "1.0.0")
-        XCTAssertEqual(AppPaths.appBuild, "11")
-        XCTAssertEqual(AppPaths.versionString, "v1.0.0")
+        XCTAssertEqual(AppPaths.appVersion, "1.1.0")
+        XCTAssertEqual(AppPaths.appBuild, "12")
+        XCTAssertEqual(AppPaths.versionString, "v1.1.0")
     }
 
     @MainActor
@@ -957,5 +957,58 @@ final class VibeJoyConfigStoreTests: XCTestCase {
         XCTAssertEqual(AgentEventKind.taskDone.rawValue, "task_done")
         XCTAssertEqual(AgentEventKind.taskFail.rawValue, "task_fail")
         XCTAssertEqual(AgentEventKind.userAttention.rawValue, "user_attention")
+    }
+
+    @MainActor
+    func testProfileTemplatesDefinitionAndImport() throws {
+        // 1. Verify 5 official templates
+        let templates = ProfileTemplate.allTemplates
+        XCTAssertEqual(templates.count, 5)
+        let ids = templates.map(\.id)
+        XCTAssertEqual(ids, ["vscode", "xcode", "terminal", "antigravity", "browser"])
+
+        for template in templates {
+            XCTAssertFalse(template.title.isEmpty)
+            XCTAssertFalse(template.subtitle.isEmpty)
+            XCTAssertFalse(template.icon.isEmpty)
+            XCTAssertFalse(template.tintColorHex.isEmpty)
+            XCTAssertFalse(template.targetApps.isEmpty)
+            XCTAssertFalse(template.highlights.isEmpty)
+            XCTAssertFalse(template.tomlContent.isEmpty)
+            XCTAssertTrue(template.highlights.contains(where: { $0.contains("Type4Me 全局锁") }))
+        }
+
+        // 2. Test importing a template
+        let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let configURL = tempDir.appendingPathComponent("config.toml")
+        try VibeJoyConfigStore.fallbackDefaultConfig.write(to: configURL, atomically: true, encoding: .utf8)
+        let store = VibeJoyConfigStore(configURL: configURL)
+
+        guard let vscodeTemplate = templates.first(where: { $0.id == "vscode" }) else {
+            XCTFail("vscode template not found")
+            return
+        }
+
+        try store.importTemplate(vscodeTemplate)
+        XCTAssertEqual(store.activeProfileName, "vscode")
+        XCTAssertTrue(store.availableProfiles.contains(where: { $0.name == "vscode" }))
+        XCTAssertEqual(store.targetApps, vscodeTemplate.targetApps)
+
+        // Verify that global locks are preserved in the imported profile
+        XCTAssertEqual(store.action(for: MappingSelection.button("a")), "tap:enter")
+        XCTAssertEqual(store.action(for: MappingSelection.button("b")), "tap:escape")
+        XCTAssertEqual(store.action(for: MappingSelection.button("x")), "combo:option+0")
+        XCTAssertEqual(store.action(for: MappingSelection.button("y")), "combo:option+1")
+        XCTAssertEqual(store.action(for: MappingSelection.button("r")), "combo:option+2")
+        XCTAssertEqual(store.action(for: MappingSelection.button("zr")), "app_switcher:system")
+
+        // Verify freed keys
+        XCTAssertEqual(store.action(for: MappingSelection.button("plus")), "combo:cmd+s")
+        XCTAssertEqual(store.action(for: MappingSelection.button("home")), "combo:cmd+shift+p")
+        XCTAssertEqual(store.action(for: MappingSelection.button("sl")), "combo:ctrl+grave")
+        XCTAssertEqual(store.action(for: MappingSelection.button("sr")), "tap:f12")
     }
 }

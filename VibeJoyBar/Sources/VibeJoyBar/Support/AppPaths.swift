@@ -33,13 +33,13 @@ enum AppPaths {
     }
 
     static var appVersion: String {
-        guard Bundle.main.bundleIdentifier == "com.terry.vibejoybar" else { return "1.0.0" }
-        return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        guard Bundle.main.bundleIdentifier == "com.terry.vibejoybar" else { return "1.1.0" }
+        return Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.1.0"
     }
 
     static var appBuild: String {
-        guard Bundle.main.bundleIdentifier == "com.terry.vibejoybar" else { return "11" }
-        return Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "11"
+        guard Bundle.main.bundleIdentifier == "com.terry.vibejoybar" else { return "12" }
+        return Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "12"
     }
 
     static var versionString: String {

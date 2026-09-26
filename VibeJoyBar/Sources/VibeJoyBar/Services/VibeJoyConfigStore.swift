@@ -677,6 +677,17 @@ final class VibeJoyConfigStore {
         refreshProfiles()
     }
 
+    func importTemplate(_ template: ProfileTemplate) throws {
+        let fileManager = FileManager.default
+        let baseDir = configURL.deletingLastPathComponent()
+        let profilesDir = baseDir.appendingPathComponent("profiles")
+        try fileManager.createDirectory(at: profilesDir, withIntermediateDirectories: true)
+        let targetURL = profilesDir.appendingPathComponent("\(template.id).toml")
+        try template.tomlContent.write(to: targetURL, atomically: true, encoding: .utf8)
+        refreshProfiles()
+        try switchToProfile(named: template.id)
+    }
+
     func resetToDefaultProfile(createBackup: Bool = true) throws {
         let fileManager = FileManager.default
         if createBackup {

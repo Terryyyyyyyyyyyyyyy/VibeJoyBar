@@ -22,6 +22,8 @@ import json
 import logging
 import sys
 import time
+import tomllib
+from typing import Any
 
 from . import __version__
 from .config import (
@@ -31,12 +33,13 @@ from .config import (
     default_config_path,
     default_profiles_dir,
     delete_profile,
-    ensure_profiles_initialized,
     get_active_profile,
     list_profiles,
+    list_templates,
     load_config,
     read_default_profile,
     read_example_config,
+    read_template,
     resolve_config_path,
     set_active_profile,
     switch_profile,
@@ -46,6 +49,8 @@ from .ipc import IPCError, default_socket_path, is_daemon_running
 from .ipc import call as ipc_call
 from .joycon import discover_readers
 from .rumble import PRESETS, Rumbler, preset_names, resolve_pattern
+
+logger = logging.getLogger(__name__)
 
 # ---------- Entry ----------
 
@@ -150,6 +155,7 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="profile_cmd", required=True, metavar="<profile-action>"
     )
     p_profile_sub.add_parser("list", help="list available profiles")
+    p_profile_sub.add_parser("templates", help="list built-in developer templates")
     p_profile_sub.add_parser("current", help="print active profile name")
 
     p_profile_create = p_profile_sub.add_parser("create", help="create a new profile")
@@ -460,6 +466,26 @@ def cmd_profile(args: argparse.Namespace) -> int:
             apps_list = item.get("apps", [])
             apps_str = f" [apps: {', '.join(apps_list)}]" if apps_list else " [apps: -]"
             print(f"  {bullet} {item['name']}{baseline}{active}{apps_str} -> {item['path']}")
+        return 0
+
+    if args.profile_cmd == "templates":
+        templates = list_templates()
+        if not templates:
+            print("no templates found")
+            return 0
+        print("Built-in Developer Templates:")
+        for t_name in templates:
+            try:
+                content = read_template(t_name)
+                raw = tomllib.loads(content)
+                meta_raw = raw.get("meta") or {}
+                desc = meta_raw.get("description", "")
+                apps = meta_raw.get("apps", [])
+                apps_str = f" [apps: {', '.join(apps)}]" if apps else ""
+                desc_str = f" - {desc}" if desc else ""
+                print(f"  • {t_name}{desc_str}{apps_str}")
+            except Exception:
+                print(f"  • {t_name}")
         return 0
 
     if args.profile_cmd == "current":

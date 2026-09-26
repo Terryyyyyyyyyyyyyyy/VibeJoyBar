@@ -1,0 +1,80 @@
+# VibeJoy — Antigravity & Codex Profile
+# 新一代 AI 结对编程控制台方案
+
+[meta]
+description = "Antigravity & Codex 专属方案"
+apps = ["com.google.antigravity", "com.openai.codex"]
+
+[global]
+deadzone       = 0.2
+poll_hz        = 100
+long_press_ms  = 250
+stick_mode     = "4dir"
+
+# ─────────── Right Joy-Con ───────────
+
+[profile.right.buttons]
+a       = "tap:enter"                       # 确定
+b       = "tap:escape"                      # 取消
+x       = "combo:option+0"                  # Type4Me 麦克风 1
+y       = "combo:option+1"                  # Type4Me 麦克风 2
+r       = "combo:option+2"                  # Type4Me Prompt 优化
+zr      = "app_switcher:system"             # 系统应用轮播切换
+plus    = "combo:cmd+s"                     # 保存 / 采纳变更
+home    = "window_switch:com.google.antigravity,com.openai.codex" # 双窗口极速切换
+sl      = "modifier:layer1"                 # 物理修饰层 1 (按住切换第二套按键)
+sr      = "combo:cmd+n"                     # 新建对话 / 会话
+"r-stick" = "none"
+
+[profile.right.stick]
+up      = "macro:codex_page_up"             # 向上滚动对话
+down    = "macro:codex_page_down"           # 向下滚动对话
+left    = "macro:codex_previous_thread"     # 切换到上一个会话
+right   = "macro:codex_next_thread"         # 切换到下一个会话
+
+[profile.right.layers.layer1.buttons]
+a       = "combo:cmd+enter"                 # 发送提示词 / 消息
+b       = "combo:cmd+w"                     # 关闭当前会话标签
+x       = "combo:cmd+k"                     # 命令控制面板
+y       = "combo:cmd+l"                     # 聚焦输入框
+
+# ─────────── Left Joy-Con ───────────
+
+[profile.left.buttons]
+right   = "tap:enter"                       # 对应 A
+down    = "tap:escape"                      # 对应 B
+up      = "combo:option+0"                  # 对应 X
+left    = "combo:option+1"                  # 对应 Y
+l       = "combo:option+2"                  # 对应 R
+zl      = "app_switcher:system"             # 对应 ZR
+minus   = "combo:cmd+s"                     # 对应 +
+capture = "window_switch:com.google.antigravity,com.openai.codex" # 对应 Home
+sl      = "modifier:layer1"                 # 对应 SL 修饰层
+sr      = "combo:cmd+n"                     # 对应 SR 新建会话
+"l-stick" = "none"
+
+[profile.left.stick]
+up      = "macro:codex_page_up"             # 向上滚动对话
+down    = "macro:codex_page_down"           # 向下滚动对话
+left    = "macro:codex_previous_thread"     # 切换到上一个会话
+right   = "macro:codex_next_thread"         # 切换到下一个会话
+
+[profile.left.layers.layer1.buttons]
+right   = "combo:cmd+enter"                 # 对应 A
+down    = "combo:cmd+w"                     # 对应 B
+up      = "combo:cmd+k"                     # 对应 X
+left    = "combo:cmd+l"                     # 对应 Y
+
+# ─────────── Macros ───────────
+
+[macro.codex_page_up]
+steps   = ["scroll:up@8"]
+
+[macro.codex_page_down]
+steps   = ["scroll:down@8"]
+
+[macro.codex_previous_thread]
+steps   = ["combo:option+up"]
+
+[macro.codex_next_thread]
+steps   = ["combo:option+down"]

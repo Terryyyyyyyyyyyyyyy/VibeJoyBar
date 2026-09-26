@@ -74,6 +74,11 @@ packages = ["src/vibejoy"]
 "src/vibejoy/config.example.toml" = "vibejoy/config.example.toml"
 "src/vibejoy/profiles/default.toml" = "vibejoy/profiles/default.toml"
 "src/vibejoy/profiles/left_default.toml" = "vibejoy/profiles/left_default.toml"
+"src/vibejoy/profiles/vscode.toml" = "vibejoy/profiles/vscode.toml"
+"src/vibejoy/profiles/xcode.toml" = "vibejoy/profiles/xcode.toml"
+"src/vibejoy/profiles/terminal.toml" = "vibejoy/profiles/terminal.toml"
+"src/vibejoy/profiles/antigravity.toml" = "vibejoy/profiles/antigravity.toml"
+"src/vibejoy/profiles/browser.toml" = "vibejoy/profiles/browser.toml"
 
 [tool.hatch.build.targets.sdist]
 include = [
