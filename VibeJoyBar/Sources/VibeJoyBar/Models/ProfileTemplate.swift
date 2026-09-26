@@ -337,7 +337,7 @@ public struct ProfileTemplate: Identifiable, Sendable {
                 "company.thebrowser.Browser",
                 "com.microsoft.edgemac"
             ],
-            highlights: ["摇杆切换标签", "平滑网页滚动", "SL 关闭标签", "🔒 Type4Me 全局锁"],
+            highlights: ["摇杆切标签", "下压摇杆关标签", "减号新建/方块恢复", "侧键历史前进后退", "🔒 Type4Me 全局锁"],
             tomlContent: """
             # VibeJoy — Browser Profile (浏览器专属方案)
             # 针对 Safari, Chrome, Arc, Edge 等浏览器优化
@@ -361,11 +361,11 @@ public struct ProfileTemplate: Identifiable, Sendable {
             y       = "combo:option+1"                  # Type4Me 麦克风 2
             r       = "combo:option+2"                  # Type4Me Prompt 优化
             zr      = "app_switcher:system"             # 系统应用轮播切换
-            plus    = "combo:cmd+l"                     # 定位地址栏
-            home    = "combo:cmd+t"                     # 新建标签页
-            sl      = "combo:cmd+w"                     # 关闭标签页
-            sr      = "combo:cmd+r"                     # 刷新页面
-            "r-stick" = "none"
+            plus    = "combo:cmd+t"                     # 新建标签页
+            home    = "combo:cmd+shift+t"               # 恢复关闭的标签页
+            sl      = "combo:cmd+["                     # 历史后退
+            sr      = "combo:cmd+]"                     # 历史前进
+            "r-stick" = "combo:cmd+w"                   # 关闭当前标签页
 
             [profile.right.stick]
             up      = "macro:browser_scroll_up"         # 向上流畅滚动
@@ -382,11 +382,11 @@ public struct ProfileTemplate: Identifiable, Sendable {
             left    = "combo:option+1"                  # 对应 Y
             l       = "combo:option+2"                  # 对应 R
             zl      = "app_switcher:system"             # 对应 ZR
-            minus   = "combo:cmd+l"                     # 定位地址栏
-            capture = "combo:cmd+t"                     # 新建标签页
-            sl      = "combo:cmd+w"                     # 关闭标签页
-            sr      = "combo:cmd+r"                     # 刷新页面
-            "l-stick" = "none"
+            minus   = "combo:cmd+t"                     # 新建标签页
+            capture = "combo:cmd+shift+t"               # 恢复关闭的标签页
+            sl      = "combo:cmd+["                     # 历史后退
+            sr      = "combo:cmd+]"                     # 历史前进
+            "l-stick" = "combo:cmd+w"                   # 关闭当前标签页
 
             [profile.left.stick]
             up      = "macro:browser_scroll_up"         # 向上流畅滚动
@@ -397,10 +397,10 @@ public struct ProfileTemplate: Identifiable, Sendable {
             # ─────────── Macros ───────────
 
             [macro.browser_scroll_up]
-            steps   = ["scroll:up@8"]
+            steps   = ["scroll:up@18"]
 
             [macro.browser_scroll_down]
-            steps   = ["scroll:down@8"]
+            steps   = ["scroll:down@18"]
             """
         )
     ]
