@@ -7,6 +7,16 @@ struct MenuBarContentView: View {
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
+        if model.updateService.hasUpdate {
+            Button {
+                model.showingUpdateSheet = true
+                activateAndOpen(id: "mapper")
+            } label: {
+                Label("✨ 发现新版本 \(model.updateService.latestVersion ?? "")", systemImage: "sparkles")
+            }
+            Divider()
+        }
+
         Label(model.processService.phase.title, systemImage: model.processService.phase.symbolName)
 
         if !model.processService.batteries.isEmpty {

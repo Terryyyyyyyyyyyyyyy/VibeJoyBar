@@ -93,6 +93,7 @@ struct DashboardHeader: View {
     @State private var showingTemplateSheet = false
     @State private var newProfileName = ""
     @State private var showingDeleteConfirmation = false
+    @State private var showingUpdateSheet = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -111,6 +112,23 @@ struct DashboardHeader: View {
                         .padding(.vertical, 2.5)
                         .background(Color.accentColor.opacity(0.12), in: Capsule())
                         .overlay(Capsule().stroke(Color.accentColor.opacity(0.25), lineWidth: 1))
+                    if model.updateService.hasUpdate {
+                        Button {
+                            showingUpdateSheet = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrow.up.circle.fill")
+                                Text("发现新版 \(model.updateService.latestVersion ?? "")")
+                            }
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.orange, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .help("点击查阅新版本说明与更新下载")
+                    }
                     if let battery = model.activeBattery {
                         BatteryBadgeView(battery: battery)
                     }
@@ -279,6 +297,15 @@ struct DashboardHeader: View {
             }
             .sheet(isPresented: $showingTemplateSheet) {
                 ProfileTemplateSheet(model: model)
+            }
+            .sheet(isPresented: $showingUpdateSheet) {
+                UpdateDialogSheet(updateService: model.updateService)
+            }
+            .onChange(of: model.showingUpdateSheet) { _, newValue in
+                if newValue {
+                    showingUpdateSheet = true
+                    model.showingUpdateSheet = false
+                }
             }
         }
         .padding(.horizontal, 22)

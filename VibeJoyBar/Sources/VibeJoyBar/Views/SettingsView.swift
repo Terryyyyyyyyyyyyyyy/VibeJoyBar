@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @Bindable var model: AppModel
+    @State private var showingUpdateSheet = false
 
     var body: some View {
         Form {
@@ -130,11 +131,47 @@ struct SettingsView: View {
                     Text("vibejoy \(AppPaths.appVersion)")
                         .foregroundStyle(.secondary)
                 }
+
+                Toggle(
+                    "启动时自动检查更新",
+                    isOn: Binding(
+                        get: { model.updateService.autoCheckEnabled },
+                        set: { model.updateService.autoCheckEnabled = $0 }
+                    )
+                )
+
+                HStack(spacing: 8) {
+                    Button("检查更新…") {
+                        Task {
+                            await model.updateService.checkForUpdates(manual: true)
+                        }
+                    }
+                    .disabled(model.updateService.isChecking)
+
+                    if model.updateService.isChecking {
+                        ProgressView()
+                            .controlSize(.small)
+                            .scaleEffect(0.7)
+                    } else if let msg = model.updateService.checkStatusMessage {
+                        Text(msg)
+                            .font(.caption)
+                            .foregroundStyle(model.updateService.hasUpdate ? .orange : .secondary)
+                    }
+                }
+
+                if model.updateService.hasUpdate {
+                    Button("查看新版本详情…") {
+                        showingUpdateSheet = true
+                    }
+                }
             }
         }
         .formStyle(.grouped)
-        .frame(width: 580, height: 680)
+        .frame(width: 580, height: 720)
         .padding()
+        .sheet(isPresented: $showingUpdateSheet) {
+            UpdateDialogSheet(updateService: model.updateService)
+        }
         .onAppear {
             NSApp.activate(ignoringOtherApps: true)
             DispatchQueue.main.async {

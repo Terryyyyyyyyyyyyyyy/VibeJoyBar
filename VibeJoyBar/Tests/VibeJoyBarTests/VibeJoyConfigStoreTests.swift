@@ -893,9 +893,75 @@ final class VibeJoyConfigStoreTests: XCTestCase {
     }
 
     func testAppVersionAndBuildDefaultValues() {
-        XCTAssertEqual(AppPaths.appVersion, "1.1.1")
-        XCTAssertEqual(AppPaths.appBuild, "13")
-        XCTAssertEqual(AppPaths.versionString, "v1.1.1")
+        XCTAssertEqual(AppPaths.appVersion, "1.2.0")
+        XCTAssertEqual(AppPaths.appBuild, "14")
+        XCTAssertEqual(AppPaths.versionString, "v1.2.0")
+    }
+
+    func testUpdateCheckerVersionComparison() {
+        // Basic version comparisons
+        XCTAssertEqual(
+            UpdateCheckerService.compareVersions(current: "1.1.1", remote: "1.2.0"),
+            .orderedAscending
+        )
+        XCTAssertEqual(
+            UpdateCheckerService.compareVersions(current: "1.2.0", remote: "1.1.1"),
+            .orderedDescending
+        )
+        XCTAssertEqual(
+            UpdateCheckerService.compareVersions(current: "1.2.0", remote: "1.2.0"),
+            .orderedSame
+        )
+
+        // Stripping 'v' or 'V' prefix
+        XCTAssertEqual(
+            UpdateCheckerService.compareVersions(current: "v1.1.1", remote: "v1.2.0"),
+            .orderedAscending
+        )
+        XCTAssertEqual(
+            UpdateCheckerService.compareVersions(current: "v1.2.0", remote: "1.2.0"),
+            .orderedSame
+        )
+        XCTAssertEqual(
+            UpdateCheckerService.compareVersions(current: "1.2.0", remote: "V1.2.1"),
+            .orderedAscending
+        )
+
+        // Numeric component comparison (preventing alphabetical 1.1.10 < 1.1.9 error)
+        XCTAssertEqual(
+            UpdateCheckerService.compareVersions(current: "1.1.9", remote: "1.1.10"),
+            .orderedAscending
+        )
+        XCTAssertEqual(
+            UpdateCheckerService.compareVersions(current: "1.1.10", remote: "1.1.9"),
+            .orderedDescending
+        )
+
+        // Zero padding for different component lengths
+        XCTAssertEqual(
+            UpdateCheckerService.compareVersions(current: "1.2", remote: "1.2.0"),
+            .orderedSame
+        )
+        XCTAssertEqual(
+            UpdateCheckerService.compareVersions(current: "1.2.0.0", remote: "1.2"),
+            .orderedSame
+        )
+        XCTAssertEqual(
+            UpdateCheckerService.compareVersions(current: "1.2", remote: "1.2.1"),
+            .orderedAscending
+        )
+    }
+
+    @MainActor
+    func testUpdateCheckerServiceInitialState() {
+        let service = UpdateCheckerService()
+        XCTAssertFalse(service.isChecking)
+        XCTAssertFalse(service.hasUpdate)
+        XCTAssertNil(service.latestVersion)
+        XCTAssertNil(service.releaseTitle)
+        XCTAssertNil(service.releaseNotes)
+        XCTAssertNil(service.releaseURL)
+        XCTAssertTrue(service.autoCheckEnabled)
     }
 
     @MainActor
@@ -1011,4 +1077,104 @@ final class VibeJoyConfigStoreTests: XCTestCase {
         XCTAssertEqual(store.action(for: MappingSelection.button("sl")), "combo:ctrl+grave")
         XCTAssertEqual(store.action(for: MappingSelection.button("sr")), "tap:f12")
     }
+
+    @MainActor
+    func testUpdateCheckerServiceCheckForUpdatesDetectsNewVersion() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockUpdateURLProtocol.self]
+        let session = URLSession(configuration: config)
+
+        let json = """
+        {
+            "tag_name": "v1.3.0",
+            "name": "VibeJoy v1.3.0 Milestone",
+            "body": "Major improvements and bug fixes.",
+            "html_url": "https://github.com/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/tag/v1.3.0",
+            "published_at": "2026-10-01T00:00:00Z"
+        }
+        """
+        MockUpdateURLProtocol.mockData = json.data(using: .utf8)
+        MockUpdateURLProtocol.mockResponse = HTTPURLResponse(
+            url: URL(string: "https://api.github.com/repos/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/latest")!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )
+        MockUpdateURLProtocol.mockError = nil
+
+        let service = UpdateCheckerService(session: session)
+        await service.checkForUpdates(manual: true)
+
+        XCTAssertFalse(service.isChecking)
+        XCTAssertTrue(service.hasUpdate)
+        XCTAssertEqual(service.latestVersion, "v1.3.0")
+        XCTAssertEqual(service.releaseTitle, "VibeJoy v1.3.0 Milestone")
+        XCTAssertEqual(service.releaseNotes, "Major improvements and bug fixes.")
+        XCTAssertEqual(service.releaseURL, URL(string: "https://github.com/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/tag/v1.3.0"))
+        XCTAssertEqual(service.checkStatusMessage, "发现新版本 v1.3.0")
+        XCTAssertNotNil(service.lastCheckedDate)
+    }
+
+    @MainActor
+    func testUpdateCheckerServiceCheckForUpdatesWhenAlreadyLatest() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockUpdateURLProtocol.self]
+        let session = URLSession(configuration: config)
+
+        let json = """
+        {
+            "tag_name": "v1.2.0",
+            "name": "VibeJoy v1.2.0",
+            "body": "Current release.",
+            "html_url": "https://github.com/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/tag/v1.2.0",
+            "published_at": "2026-09-27T00:00:00Z"
+        }
+        """
+        MockUpdateURLProtocol.mockData = json.data(using: .utf8)
+        MockUpdateURLProtocol.mockResponse = HTTPURLResponse(
+            url: URL(string: "https://api.github.com/repos/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/latest")!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )
+        MockUpdateURLProtocol.mockError = nil
+
+        let service = UpdateCheckerService(session: session)
+        await service.checkForUpdates(manual: true)
+
+        XCTAssertFalse(service.isChecking)
+        XCTAssertFalse(service.hasUpdate)
+        XCTAssertEqual(service.checkStatusMessage, "当前已是最新版本 (v1.2.0)")
+    }
 }
+
+final class MockUpdateURLProtocol: URLProtocol {
+    static var mockData: Data?
+    static var mockResponse: URLResponse?
+    static var mockError: Error?
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        if let error = Self.mockError {
+            client?.urlProtocol(self, didFailWithError: error)
+            return
+        }
+        if let response = Self.mockResponse {
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        }
+        if let data = Self.mockData {
+            client?.urlProtocol(self, didLoad: data)
+        }
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() {}
+}
+

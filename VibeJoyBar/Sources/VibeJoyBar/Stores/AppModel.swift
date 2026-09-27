@@ -10,7 +10,9 @@ final class AppModel {
     let processService: VibeJoyProcessService
     let configStore: VibeJoyConfigStore
     let loginItemService = LoginItemService()
+    @ObservationIgnored let updateService = UpdateCheckerService()
     @ObservationIgnored private(set) lazy var routerService = AppRouterService(model: self)
+    var showingUpdateSheet = false
 
     var projectPath: String
     var configPath: String
@@ -87,6 +89,12 @@ final class AppModel {
             uvURL: AppPaths.expandedURL(savedUVPath)
         )
         configStore = VibeJoyConfigStore(configURL: AppPaths.expandedURL(savedConfigPath))
+
+        if updateService.autoCheckEnabled {
+            Task {
+                await updateService.checkForUpdates(manual: false)
+            }
+        }
     }
 
     func startOnLaunchIfNeeded() {
