@@ -893,9 +893,9 @@ final class VibeJoyConfigStoreTests: XCTestCase {
     }
 
     func testAppVersionAndBuildDefaultValues() {
-        XCTAssertEqual(AppPaths.appVersion, "1.1.0")
-        XCTAssertEqual(AppPaths.appBuild, "12")
-        XCTAssertEqual(AppPaths.versionString, "v1.1.0")
+        XCTAssertEqual(AppPaths.appVersion, "1.1.1")
+        XCTAssertEqual(AppPaths.appBuild, "13")
+        XCTAssertEqual(AppPaths.versionString, "v1.1.1")
     }
 
     @MainActor
