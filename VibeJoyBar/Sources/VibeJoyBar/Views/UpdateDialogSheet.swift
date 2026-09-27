@@ -83,27 +83,102 @@ struct UpdateDialogSheet: View {
 
             Divider()
 
-            // Action footer
-            HStack {
-                Spacer()
+            // Action footer / Stage view
+            Group {
+                switch updateService.stage {
+                case .ready:
+                    HStack {
+                        Button("稍后提醒") {
+                            dismiss()
+                        }
+                        .keyboardShortcut(.cancelAction)
 
-                Button("稍后提醒") {
-                    dismiss()
-                }
-                .keyboardShortcut(.cancelAction)
+                        Spacer()
 
-                if let url = updateService.releaseURL {
-                    Button {
-                        NSWorkspace.shared.open(url)
-                        dismiss()
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text("前往下载更新")
-                            Image(systemName: "arrow.up.forward.app")
+                        if updateService.canInAppUpdate {
+                            if let url = updateService.releaseURL {
+                                Link("前往网页下载", destination: url)
+                                    .font(.body)
+                                    .padding(.trailing, 6)
+                            }
+
+                            Button {
+                                Task {
+                                    await updateService.startInAppUpdate()
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Text("🚀 立即在应用内自动更新")
+                                }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .keyboardShortcut(.defaultAction)
+                        } else if let url = updateService.releaseURL {
+                            Link("前往网页下载更新", destination: url)
+                                .buttonStyle(.borderedProminent)
+                                .keyboardShortcut(.defaultAction)
                         }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
+
+                case .downloading(let progress, let written, let total):
+                    VStack(alignment: .leading, spacing: 6) {
+                        ProgressView(value: progress)
+                            .progressViewStyle(.linear)
+
+                        HStack {
+                            Text("正在高速下载新版本，请勿退出应用…")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+
+                            Spacer()
+
+                            let totalBytes = total > 0 ? total : updateService.assetSize
+                            Text("\(ByteCountFormatter.string(fromByteCount: written, countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: totalBytes, countStyle: .file)) (\(Int(progress * 100))%)")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                case .extracting:
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("正在解压并验证安装包…")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+
+                case .restarting:
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("更新完成，正在重启 VibeJoy Bar…")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Spacer()
+                    }
+
+                case .failed(let msg):
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("更新失败：\(msg)")
+                                .foregroundStyle(.red)
+                                .font(.caption)
+                                .lineLimit(2)
+                        }
+
+                        Spacer()
+
+                        Button("重试") {
+                            updateService.resetStage()
+                        }
+
+                        if let url = updateService.releaseURL {
+                            Link("改去网页下载", destination: url)
+                                .buttonStyle(.borderedProminent)
+                        }
+                    }
                 }
             }
             .padding(.horizontal, 24)
@@ -111,5 +186,15 @@ struct UpdateDialogSheet: View {
             .background(Color(nsColor: .windowBackgroundColor).opacity(0.4))
         }
         .frame(width: 520, height: 460)
+        .interactiveDismissDisabled(isUpdating)
+    }
+
+    private var isUpdating: Bool {
+        switch updateService.stage {
+        case .downloading, .extracting, .restarting:
+            return true
+        case .ready, .failed:
+            return false
+        }
     }
 }

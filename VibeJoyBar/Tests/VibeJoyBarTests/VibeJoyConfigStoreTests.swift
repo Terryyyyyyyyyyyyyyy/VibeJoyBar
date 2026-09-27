@@ -893,9 +893,9 @@ final class VibeJoyConfigStoreTests: XCTestCase {
     }
 
     func testAppVersionAndBuildDefaultValues() {
-        XCTAssertEqual(AppPaths.appVersion, "1.2.0")
-        XCTAssertEqual(AppPaths.appBuild, "14")
-        XCTAssertEqual(AppPaths.versionString, "v1.2.0")
+        XCTAssertEqual(AppPaths.appVersion, "1.2.1")
+        XCTAssertEqual(AppPaths.appBuild, "15")
+        XCTAssertEqual(AppPaths.versionString, "v1.2.1")
     }
 
     func testUpdateCheckerVersionComparison() {
@@ -961,6 +961,10 @@ final class VibeJoyConfigStoreTests: XCTestCase {
         XCTAssertNil(service.releaseTitle)
         XCTAssertNil(service.releaseNotes)
         XCTAssertNil(service.releaseURL)
+        XCTAssertNil(service.downloadAssetURL)
+        XCTAssertEqual(service.assetSize, 0)
+        XCTAssertEqual(service.stage, .ready)
+        XCTAssertFalse(service.canInAppUpdate)
         XCTAssertTrue(service.autoCheckEnabled)
     }
 
@@ -1123,10 +1127,10 @@ final class VibeJoyConfigStoreTests: XCTestCase {
 
         let json = """
         {
-            "tag_name": "v1.2.0",
-            "name": "VibeJoy v1.2.0",
+            "tag_name": "v1.2.1",
+            "name": "VibeJoy v1.2.1",
             "body": "Current release.",
-            "html_url": "https://github.com/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/tag/v1.2.0",
+            "html_url": "https://github.com/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/tag/v1.2.1",
             "published_at": "2026-09-27T00:00:00Z"
         }
         """
@@ -1144,7 +1148,130 @@ final class VibeJoyConfigStoreTests: XCTestCase {
 
         XCTAssertFalse(service.isChecking)
         XCTAssertFalse(service.hasUpdate)
-        XCTAssertEqual(service.checkStatusMessage, "当前已是最新版本 (v1.2.0)")
+        XCTAssertNil(service.downloadAssetURL)
+        XCTAssertEqual(service.assetSize, 0)
+        XCTAssertFalse(service.canInAppUpdate)
+        XCTAssertEqual(service.checkStatusMessage, "当前已是最新版本 (v1.2.1)")
+    }
+
+    @MainActor
+    func testUpdateCheckerStageTransitionsAndEquality() {
+        XCTAssertEqual(UpdateStage.ready, .ready)
+        XCTAssertEqual(
+            UpdateStage.downloading(progress: 0.5, bytesWritten: 500, totalBytes: 1000),
+            UpdateStage.downloading(progress: 0.5, bytesWritten: 500, totalBytes: 1000)
+        )
+        XCTAssertNotEqual(
+            UpdateStage.downloading(progress: 0.5, bytesWritten: 500, totalBytes: 1000),
+            UpdateStage.downloading(progress: 0.6, bytesWritten: 600, totalBytes: 1000)
+        )
+        XCTAssertNotEqual(
+            UpdateStage.downloading(progress: 0.5, bytesWritten: 500, totalBytes: 1000),
+            UpdateStage.extracting
+        )
+        XCTAssertEqual(UpdateStage.extracting, .extracting)
+        XCTAssertEqual(UpdateStage.restarting, .restarting)
+        XCTAssertEqual(UpdateStage.failed("network error"), .failed("network error"))
+        XCTAssertNotEqual(UpdateStage.failed("network error"), .failed("other error"))
+
+        let service = UpdateCheckerService()
+        XCTAssertEqual(service.stage, .ready)
+        service.resetStage()
+        XCTAssertEqual(service.stage, .ready)
+    }
+
+    @MainActor
+    func testUpdateCheckerParseReleaseWithZipAsset() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockUpdateURLProtocol.self]
+        let session = URLSession(configuration: config)
+
+        let json = """
+        {
+            "tag_name": "v1.3.0",
+            "name": "VibeJoy v1.3.0 Milestone",
+            "body": "Major improvements and bug fixes.",
+            "html_url": "https://github.com/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/tag/v1.3.0",
+            "published_at": "2026-10-01T00:00:00Z",
+            "assets": [
+                {
+                    "name": "source.tar.gz",
+                    "size": 1024,
+                    "browser_download_url": "https://github.com/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/download/v1.3.0/source.tar.gz"
+                },
+                {
+                    "name": "VibeJoyBar-macOS.zip",
+                    "size": 26214400,
+                    "browser_download_url": "https://github.com/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/download/v1.3.0/VibeJoyBar-macOS.zip"
+                }
+            ]
+        }
+        """
+        MockUpdateURLProtocol.mockData = json.data(using: .utf8)
+        MockUpdateURLProtocol.mockResponse = HTTPURLResponse(
+            url: URL(string: "https://api.github.com/repos/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/latest")!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )
+        MockUpdateURLProtocol.mockError = nil
+
+        let service = UpdateCheckerService(session: session)
+        await service.checkForUpdates(manual: true)
+
+        XCTAssertFalse(service.isChecking)
+        XCTAssertTrue(service.hasUpdate)
+        XCTAssertEqual(service.latestVersion, "v1.3.0")
+        XCTAssertEqual(
+            service.downloadAssetURL,
+            URL(string: "https://github.com/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/download/v1.3.0/VibeJoyBar-macOS.zip")
+        )
+        XCTAssertEqual(service.assetSize, 26214400)
+        XCTAssertTrue(service.canInAppUpdate)
+        XCTAssertEqual(service.stage, .ready)
+    }
+
+    @MainActor
+    func testUpdateCheckerParseReleaseWithoutZipAsset() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MockUpdateURLProtocol.self]
+        let session = URLSession(configuration: config)
+
+        let json = """
+        {
+            "tag_name": "v1.3.0",
+            "name": "VibeJoy v1.3.0 Milestone",
+            "body": "Release without direct binary asset.",
+            "html_url": "https://github.com/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/tag/v1.3.0",
+            "published_at": "2026-10-01T00:00:00Z",
+            "assets": [
+                {
+                    "name": "source.tar.gz",
+                    "size": 1024,
+                    "browser_download_url": "https://github.com/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/download/v1.3.0/source.tar.gz"
+                }
+            ]
+        }
+        """
+        MockUpdateURLProtocol.mockData = json.data(using: .utf8)
+        MockUpdateURLProtocol.mockResponse = HTTPURLResponse(
+            url: URL(string: "https://api.github.com/repos/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/latest")!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "application/json"]
+        )
+        MockUpdateURLProtocol.mockError = nil
+
+        let service = UpdateCheckerService(session: session)
+        await service.checkForUpdates(manual: true)
+
+        XCTAssertFalse(service.isChecking)
+        XCTAssertTrue(service.hasUpdate)
+        XCTAssertEqual(service.latestVersion, "v1.3.0")
+        XCTAssertNil(service.downloadAssetURL)
+        XCTAssertEqual(service.assetSize, 0)
+        XCTAssertFalse(service.canInAppUpdate)
+        XCTAssertEqual(service.stage, .ready)
     }
 }
 
