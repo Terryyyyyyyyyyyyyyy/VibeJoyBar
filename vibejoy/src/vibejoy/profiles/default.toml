@@ -66,7 +66,7 @@ if_app  = "com.openai.codex, com.microsoft.VSCode, Cursor"
 steps   = ["combo:cmd+shift+["]
 
 [macro."codex_previous_thread@antigravity"]
-if_app  = "com.google.antigravity, Antigravity"
+if_app  = "com.google.antigravity, Antigravity, com.deepseek.dsh, DeepSeek Harness"
 steps   = ["combo:option+up"]
 
 [macro.codex_next_thread]
@@ -74,7 +74,7 @@ if_app  = "com.openai.codex, com.microsoft.VSCode, Cursor"
 steps   = ["combo:cmd+shift+]"]
 
 [macro."codex_next_thread@antigravity"]
-if_app  = "com.google.antigravity, Antigravity"
+if_app  = "com.google.antigravity, Antigravity, com.deepseek.dsh, DeepSeek Harness"
 steps   = ["combo:option+down"]
 
 [macro.claude_focus]

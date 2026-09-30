@@ -175,6 +175,7 @@ struct ProfileTemplateSheet: View {
             case "net.kovidgoyal.kitty": return "Kitty"
             case "com.google.antigravity": return "Antigravity"
             case "com.openai.codex": return "Codex"
+            case "com.deepseek.dsh": return "DeepSeek"
             case "com.apple.Safari": return "Safari"
             case "com.google.Chrome": return "Chrome"
             case "company.thebrowser.Browser": return "Arc"

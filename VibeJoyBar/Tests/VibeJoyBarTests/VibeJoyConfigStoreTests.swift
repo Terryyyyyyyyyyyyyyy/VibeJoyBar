@@ -893,9 +893,9 @@ final class VibeJoyConfigStoreTests: XCTestCase {
     }
 
     func testAppVersionAndBuildDefaultValues() {
-        XCTAssertEqual(AppPaths.appVersion, "1.2.1")
-        XCTAssertEqual(AppPaths.appBuild, "15")
-        XCTAssertEqual(AppPaths.versionString, "v1.2.1")
+        XCTAssertEqual(AppPaths.appVersion, "1.2.2")
+        XCTAssertEqual(AppPaths.appBuild, "16")
+        XCTAssertEqual(AppPaths.versionString, "v1.2.2")
     }
 
     func testUpdateCheckerVersionComparison() {
@@ -1048,6 +1048,10 @@ final class VibeJoyConfigStoreTests: XCTestCase {
             XCTAssertTrue(template.highlights.contains(where: { $0.contains("Type4Me 全局锁") }))
         }
 
+        XCTAssertEqual(ProfileTemplate.antigravity.title, "Antigravity, Codex & DeepSeek")
+        XCTAssertTrue(ProfileTemplate.antigravity.targetApps.contains("DeepSeek"))
+        XCTAssertTrue(ProfileTemplate.antigravity.tomlContent.contains("com.deepseek.dsh"))
+
         // 2. Test importing a template
         let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
@@ -1127,11 +1131,11 @@ final class VibeJoyConfigStoreTests: XCTestCase {
 
         let json = """
         {
-            "tag_name": "v1.2.1",
-            "name": "VibeJoy v1.2.1",
+            "tag_name": "v1.2.2",
+            "name": "VibeJoy v1.2.2",
             "body": "Current release.",
-            "html_url": "https://github.com/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/tag/v1.2.1",
-            "published_at": "2026-09-27T00:00:00Z"
+            "html_url": "https://github.com/Terryyyyyyyyyyyyyyy/VibeJoyBar/releases/tag/v1.2.2",
+            "published_at": "2026-09-30T00:00:00Z"
         }
         """
         MockUpdateURLProtocol.mockData = json.data(using: .utf8)
@@ -1151,7 +1155,7 @@ final class VibeJoyConfigStoreTests: XCTestCase {
         XCTAssertNil(service.downloadAssetURL)
         XCTAssertEqual(service.assetSize, 0)
         XCTAssertFalse(service.canInAppUpdate)
-        XCTAssertEqual(service.checkStatusMessage, "当前已是最新版本 (v1.2.1)")
+        XCTAssertEqual(service.checkStatusMessage, "当前已是最新版本 (v1.2.2)")
     }
 
     @MainActor

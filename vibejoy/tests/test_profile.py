@@ -65,10 +65,10 @@ def test_default_profile_loads_and_validates(tmp_path: Path):
     assert cfg.macros["codex_page_up"].steps == ("scroll:up@8",)
     assert cfg.macros["codex_previous_thread"].if_app == "com.openai.codex, com.microsoft.VSCode, Cursor"
     assert "codex_previous_thread@antigravity" in cfg.macros
-    assert cfg.macros["codex_previous_thread@antigravity"].if_app == "com.google.antigravity, Antigravity"
+    assert cfg.macros["codex_previous_thread@antigravity"].if_app == "com.google.antigravity, Antigravity, com.deepseek.dsh, DeepSeek Harness"
     assert cfg.macros["codex_previous_thread@antigravity"].steps == ("combo:option+up",)
     assert "codex_next_thread@antigravity" in cfg.macros
-    assert cfg.macros["codex_next_thread@antigravity"].if_app == "com.google.antigravity, Antigravity"
+    assert cfg.macros["codex_next_thread@antigravity"].if_app == "com.google.antigravity, Antigravity, com.deepseek.dsh, DeepSeek Harness"
     assert cfg.macros["codex_next_thread@antigravity"].steps == ("combo:option+down",)
 
 
@@ -395,4 +395,21 @@ def test_cli_profile_templates(capsys: pytest.CaptureFixture[str]):
     assert "terminal" in out
     assert "antigravity" in out
     assert "browser" in out
+
+
+def test_antigravity_template_deepseek_support(tmp_path: Path):
+    content = read_template("antigravity")
+    test_file = tmp_path / "antigravity.toml"
+    test_file.write_text(content, encoding="utf-8")
+    cfg = load_config(test_file)
+    assert "com.deepseek.dsh" in cfg.meta.apps
+    assert "com.google.antigravity" in cfg.meta.apps
+    assert "com.openai.codex" in cfg.meta.apps
+    assert "com.deepseek.dsh" in cfg.profiles["right"].buttons["home"]
+    assert "com.deepseek.dsh" in cfg.profiles["left"].buttons["capture"]
+    assert cfg.profiles["right"].stick["left"] == "macro:codex_previous_thread"
+    assert cfg.profiles["right"].stick["right"] == "macro:codex_next_thread"
+    assert cfg.macros["codex_previous_thread"].steps == ("combo:option+up",)
+    assert cfg.macros["codex_next_thread"].steps == ("combo:option+down",)
+
 

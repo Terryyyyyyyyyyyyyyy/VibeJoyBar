@@ -786,7 +786,7 @@ final class VibeJoyConfigStore {
     steps   = ["combo:cmd+shift+["]
 
     [macro."codex_previous_thread@antigravity"]
-    if_app  = "com.google.antigravity, Antigravity"
+    if_app  = "com.google.antigravity, Antigravity, com.deepseek.dsh, DeepSeek Harness"
     steps   = ["combo:option+up"]
 
     [macro.codex_next_thread]
@@ -794,7 +794,7 @@ final class VibeJoyConfigStore {
     steps   = ["combo:cmd+shift+]"]
 
     [macro."codex_next_thread@antigravity"]
-    if_app  = "com.google.antigravity, Antigravity"
+    if_app  = "com.google.antigravity, Antigravity, com.deepseek.dsh, DeepSeek Harness"
     steps   = ["combo:option+down"]
 
     [macro.claude_focus]
@@ -957,16 +957,23 @@ final class VibeJoyConfigStore {
             }
         }
 
+        for index in lines.indices {
+            let trimmed = lines[index].trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed == "if_app  = \"com.google.antigravity, Antigravity\"" || trimmed == "if_app = \"com.google.antigravity, Antigravity\"" {
+                lines[index] = "if_app  = \"com.google.antigravity, Antigravity, com.deepseek.dsh, DeepSeek Harness\""
+            }
+        }
+
         if !lines.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).contains("codex_previous_thread@antigravity") }) {
             lines.append("")
             lines.append("[macro.\"codex_previous_thread@antigravity\"]")
-            lines.append("if_app  = \"com.google.antigravity, Antigravity\"")
+            lines.append("if_app  = \"com.google.antigravity, Antigravity, com.deepseek.dsh, DeepSeek Harness\"")
             lines.append("steps   = [\"combo:option+up\"]")
         }
         if !lines.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).contains("codex_next_thread@antigravity") }) {
             lines.append("")
             lines.append("[macro.\"codex_next_thread@antigravity\"]")
-            lines.append("if_app  = \"com.google.antigravity, Antigravity\"")
+            lines.append("if_app  = \"com.google.antigravity, Antigravity, com.deepseek.dsh, DeepSeek Harness\"")
             lines.append("steps   = [\"combo:option+down\"]")
         }
 

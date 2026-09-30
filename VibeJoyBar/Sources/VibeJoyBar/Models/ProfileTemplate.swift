@@ -15,6 +15,10 @@ public struct ProfileTemplate: Identifiable, Sendable {
         Color(hex: tintColorHex)
     }
 
+    public static var antigravity: ProfileTemplate {
+        allTemplates.first(where: { $0.id == "antigravity" })!
+    }
+
     public static let allTemplates: [ProfileTemplate] = [
         .init(
             id: "vscode",
@@ -233,13 +237,14 @@ public struct ProfileTemplate: Identifiable, Sendable {
         ),
         .init(
             id: "antigravity",
-            title: "Antigravity & Codex",
+            title: "Antigravity, Codex & DeepSeek",
             subtitle: "新一代 AI 辅助结对编程控制台",
             icon: "sparkles",
             tintColorHex: "#AF52DE",
             targetApps: [
-                "com.google.antigravity",
-                "com.openai.codex"
+                "Antigravity",
+                "Codex",
+                "DeepSeek"
             ],
             highlights: ["摇杆切换会话", "多行平滑滚动", "SL 物理修饰层", "🔒 Type4Me 全局锁"],
             tomlContent: """
@@ -247,8 +252,8 @@ public struct ProfileTemplate: Identifiable, Sendable {
             # 新一代 AI 结对编程控制台方案
 
             [meta]
-            description = "Antigravity & Codex 专属方案"
-            apps = ["com.google.antigravity", "com.openai.codex"]
+            description = "Antigravity, Codex & DeepSeek 专属方案"
+            apps = ["com.google.antigravity", "com.openai.codex", "com.deepseek.dsh"]
 
             [global]
             deadzone       = 0.2
@@ -266,7 +271,7 @@ public struct ProfileTemplate: Identifiable, Sendable {
             r       = "combo:option+2"                  # Type4Me Prompt 优化
             zr      = "app_switcher:system"             # 系统应用轮播切换
             plus    = "combo:cmd+s"                     # 保存 / 采纳变更
-            home    = "window_switch:com.google.antigravity,com.openai.codex" # 双窗口极速切换
+            home    = "window_switch:com.google.antigravity,com.openai.codex,com.deepseek.dsh" # 多窗口极速切换
             sl      = "modifier:layer1"                 # 物理修饰层 1 (按住切换第二套按键)
             sr      = "combo:cmd+n"                     # 新建对话 / 会话
             "r-stick" = "none"
@@ -293,7 +298,7 @@ public struct ProfileTemplate: Identifiable, Sendable {
             l       = "combo:option+2"                  # 对应 R
             zl      = "app_switcher:system"             # 对应 ZR
             minus   = "combo:cmd+s"                     # 对应 +
-            capture = "window_switch:com.google.antigravity,com.openai.codex" # 对应 Home
+            capture = "window_switch:com.google.antigravity,com.openai.codex,com.deepseek.dsh" # 对应 Home
             sl      = "modifier:layer1"                 # 对应 SL 修饰层
             sr      = "combo:cmd+n"                     # 对应 SR 新建会话
             "l-stick" = "none"
